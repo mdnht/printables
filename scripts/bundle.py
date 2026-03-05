@@ -71,10 +71,24 @@ def resolve_path(ref_path: str, current_dir: Path, search_dirs: list[Path]) -> P
     return None
 
 
+def _normalize_path_prefix(path: str) -> str:
+    """Normalize a path or prefix for consistent comparison."""
+    path = path.replace("\\", "/")
+    while path.startswith("./"):
+        path = path[2:]
+    if path != "/":
+        path = path.rstrip("/")
+    return path
+
+
 def _is_excluded(ref_path: str, exclude_prefixes: list[str]) -> bool:
     """Return True if *ref_path* starts with any of the excluded prefixes."""
+    normalized_ref = _normalize_path_prefix(ref_path)
     for prefix in exclude_prefixes:
-        if ref_path == prefix or ref_path.startswith(prefix + "/"):
+        normalized_prefix = _normalize_path_prefix(prefix)
+        if not normalized_prefix:
+            continue
+        if normalized_ref == normalized_prefix or normalized_ref.startswith(normalized_prefix + "/"):
             return True
     return False
 
@@ -223,9 +237,13 @@ def _parse_definitions(clean: str) -> list[_Definition]:
             j = paren_end
             while j < len(clean) and clean[j] in " \t\n\r":
                 j += 1
-            if j >= len(clean) or clean[j] != "{":
-                continue  # braceless one-liner – too small to matter
-            end = _find_matching(clean, j, "{", "}")
+            if j >= len(clean):
+                continue
+            if clean[j] == "{":
+                end = _find_matching(clean, j, "{", "}")
+            else:
+                semi = clean.find(";", j)
+                end = semi + 1 if semi != -1 else len(clean)
         else:  # function
             j = paren_end
             while j < len(clean) and clean[j] in " \t\n\r":
@@ -272,14 +290,22 @@ def tree_shake(source: str) -> str:
     clean = _sanitize_source(source)
     all_defs = _parse_definitions(clean)
 
-    # Keep only top-level definitions (not nested inside others).
-    top_defs = [
-        d
-        for d in all_defs
-        if not any(
-            o.start < d.start and d.end <= o.end for o in all_defs if o is not d
+    # Determine top-level definitions (not nested inside others) using a
+    # sort + stack sweep in O(n log n) instead of pairwise O(n²) checks.
+    sorted_defs = sorted(all_defs, key=lambda d: (d.start, -d.end))
+    top_defs: list[_Definition] = []
+    stack: list[_Definition] = []
+    for d in sorted_defs:
+        while stack and d.start >= stack[-1].end:
+            stack.pop()
+        is_nested = (
+            bool(stack)
+            and stack[-1].start < d.start
+            and d.end <= stack[-1].end
         )
-    ]
+        if not is_nested:
+            top_defs.append(d)
+        stack.append(d)
     if not top_defs:
         return source
 
@@ -334,9 +360,17 @@ def tree_shake(source: str) -> str:
         else:
             merged.append((s, e))
 
-    result = source
-    for s, e in reversed(merged):
-        result = result[:s] + result[e:]
+    # Build the result in one pass by collecting the kept spans between
+    # merged removal regions, avoiding repeated string slicing.
+    parts: list[str] = []
+    prev_end = 0
+    for s, e in merged:
+        if s > prev_end:
+            parts.append(source[prev_end:s])
+        prev_end = e
+    if prev_end < len(source):
+        parts.append(source[prev_end:])
+    result = "".join(parts)
 
     # Collapse excessive consecutive blank lines (3+ → 2).
     result = re.sub(r"\n{4,}", "\n\n\n", result)
