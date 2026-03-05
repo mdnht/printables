@@ -1,12 +1,17 @@
 name: Deploy Catalog Site
 
+env:
+  PREVIEW_IMGSIZE: '640,480'
+
 on:
   push:
     branches:
       - main
     paths:
       - 'site/**'
+      - 'projects/**/main.scad'
       - 'projects/**/project.json'
+      - 'libs/**/*.scad'
       - 'scripts/generate_catalog.py'
       - '.github/workflows/deploy-site.yml'
   workflow_dispatch:
@@ -24,14 +29,33 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      - name: Install OpenSCAD
+        run: sudo apt-get update && sudo apt-get install -y openscad xvfb
+
+      - name: Render preview images
+        run: |
+          mkdir -p _site/images
+          for dir in projects/*/; do
+            project="$(basename "$dir")"
+            if [ -f "$dir/main.scad" ] && [ -f "$dir/project.json" ]; then
+              echo "Rendering preview for $project..."
+              xvfb-run -a openscad \
+                -o "_site/images/${project}.png" \
+                --imgsize=$PREVIEW_IMGSIZE \
+                "$dir/main.scad" || echo "WARNING: render failed for $project"
+            fi
+          done
+
       - name: Build site
-        run: python scripts/generate_catalog.py --output-dir _site --repo-root .
+        run: python scripts/generate_catalog.py --output-dir _site --repo-root . --images-dir _site/images
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

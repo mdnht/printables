@@ -68,6 +68,15 @@ main {
   font-size: 1.2rem;
 }
 
+.card-preview {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  background: #e8eaf6;
+}
+
 .card .desc {
   flex: 1;
   color: #444;

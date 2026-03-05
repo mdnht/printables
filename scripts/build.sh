@@ -10,6 +10,7 @@
 # Output
 # ------
 #   dist/<project-name>.scad  – bundled, self-contained OpenSCAD file
+#   dist/<project-name>.png   – rendered preview image (requires openscad)
 
 set -euo pipefail
 
@@ -19,6 +20,9 @@ SCRIPTS_DIR="${REPO_ROOT}/scripts"
 PROJECTS_DIR="${REPO_ROOT}/projects"
 
 mkdir -p "${DIST_DIR}"
+
+# Default preview image size (width,height)
+PREVIEW_IMGSIZE="${PREVIEW_IMGSIZE:-640,480}"
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,6 +46,24 @@ build_project() {
         --tree-shake \
         -o "${out_file}"
     log "  → ${out_file}"
+
+    render_preview "${project}"
+}
+
+render_preview() {
+    local project="$1"
+    local main_scad="${PROJECTS_DIR}/${project}/main.scad"
+    local out_png="${DIST_DIR}/${project}.png"
+
+    if ! command -v openscad &>/dev/null; then
+        warn "openscad not found – skipping preview render for ${project}"
+        return 0
+    fi
+
+    log "Rendering preview: ${project}"
+    openscad -o "${out_png}" --imgsize="${PREVIEW_IMGSIZE}" "${main_scad}" 2>/dev/null \
+        && log "  → ${out_png}" \
+        || warn "Preview render failed for ${project} (non-fatal)"
 }
 
 # ── entry point ─────────────────────────────────────────────────────────────

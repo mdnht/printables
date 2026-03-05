@@ -1,5 +1,8 @@
 name: Build 3D Models
 
+env:
+  PREVIEW_IMGSIZE: '640,480'
+
 on:
   push:
     branches:
@@ -133,6 +136,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install OpenSCAD
+        run: sudo apt-get update && sudo apt-get install -y openscad xvfb
+
       - name: Bundle project – ${{ matrix.project }}
         env:
           PROJECT: ${{ matrix.project }}
@@ -143,11 +149,22 @@ jobs:
             --tree-shake \
             -o "dist/$PROJECT.scad"
 
-      - name: Upload bundled scad artifact
+      - name: Render preview image – ${{ matrix.project }}
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          xvfb-run -a openscad \
+            -o "dist/$PROJECT.png" \
+            --imgsize=$PREVIEW_IMGSIZE \
+            "projects/$PROJECT/main.scad"
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.project }}
-          path: dist/${{ matrix.project }}.scad
+          path: |
+            dist/${{ matrix.project }}.scad
+            dist/${{ matrix.project }}.png
           if-no-files-found: error
 
   # ── Summary ────────────────────────────────────────────────────────────────

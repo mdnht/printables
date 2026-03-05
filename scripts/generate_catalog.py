@@ -8,12 +8,13 @@ Reads the HTML template and stylesheet from ``site/``, scans
 
 Usage
 -----
-    python scripts/generate_catalog.py [--output-dir _site] [--repo-root .]
+    python scripts/generate_catalog.py [--output-dir _site] [--repo-root .] [--images-dir images]
 """
 
 import argparse
 import html
 import json
+import shutil
 import sys
 from pathlib import Path
 from string import Template
@@ -22,6 +23,7 @@ from string import Template
 # Uses $-prefixed placeholders to avoid conflicts with CSS braces.
 _CARD_TEMPLATE = Template("""\
 <article class="card">
+  $image_html
   <h2>$name</h2>
   <p class="desc">$description</p>
   <div class="meta">
@@ -49,13 +51,15 @@ def load_projects(repo_root: Path) -> list[dict]:
         if not data.get("publish", False):
             continue
 
+        # Store directory name as slug for image lookup.
+        data["_slug"] = project_json.parent.name
         results.append(data)
 
     results.sort(key=lambda p: p.get("name", ""))
     return results
 
 
-def render_card(project: dict) -> str:
+def render_card(project: dict, images_dir: Path | None = None) -> str:
     """Render a single project card from metadata."""
     tags = project.get("tags", [])
     if not isinstance(tags, list):
@@ -63,16 +67,29 @@ def render_card(project: dict) -> str:
     tags_html = "".join(
         f'<span class="tag">{html.escape(str(t))}</span>' for t in tags
     )
+
+    # Build image HTML if a preview image exists.
+    image_html = ""
+    slug = project.get("_slug", "")
+    if images_dir and slug:
+        img_path = images_dir / f"{slug}.png"
+        if img_path.is_file():
+            image_html = (
+                f'<img class="card-preview" src="images/{html.escape(slug)}.png"'
+                f' alt="{html.escape(project.get("name", slug))}" loading="lazy">'
+            )
+
     return _CARD_TEMPLATE.substitute(
         name=html.escape(project.get("name", "unknown")),
         description=html.escape(project.get("description", "")),
         version=html.escape(project.get("version", "0.0.0")),
         author=html.escape(project.get("author", "unknown")),
         tags_html=tags_html,
+        image_html=image_html,
     )
 
 
-def build_site(repo_root: Path, out_dir: Path) -> None:
+def build_site(repo_root: Path, out_dir: Path, images_dir: Path | None = None) -> None:
     """Build the catalog site from source templates and project metadata."""
     site_dir = repo_root / "site"
 
@@ -95,7 +112,7 @@ def build_site(repo_root: Path, out_dir: Path) -> None:
     if not projects:
         catalog_html = '<p class="empty">公開されているプロジェクトはありません。</p>'
     else:
-        cards = "\n".join(render_card(p) for p in projects)
+        cards = "\n".join(render_card(p, images_dir) for p in projects)
         catalog_html = f'<div class="grid">\n{cards}\n</div>'
 
     # Replace template placeholders
@@ -109,6 +126,21 @@ def build_site(repo_root: Path, out_dir: Path) -> None:
     out_file = out_dir / "index.html"
     out_file.write_text(output, encoding="utf-8")
     print(f"Catalog written to {out_file}", file=sys.stderr)
+
+    # Copy preview images to output directory.
+    if images_dir and images_dir.is_dir():
+        dest_images = out_dir / "images"
+        dest_images.mkdir(parents=True, exist_ok=True)
+        # Skip copy when source and destination are the same directory.
+        if images_dir.resolve() != dest_images.resolve():
+            copied = 0
+            for img in images_dir.glob("*.png"):
+                shutil.copy2(img, dest_images / img.name)
+                copied += 1
+            print(f"Copied {copied} preview image(s) to {dest_images}", file=sys.stderr)
+        else:
+            count = sum(1 for _ in dest_images.glob("*.png"))
+            print(f"Using {count} preview image(s) in {dest_images}", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -128,13 +160,22 @@ def main(argv: list[str] | None = None) -> int:
             "script (i.e. the repo root when the script lives in scripts/)."
         ),
     )
+    parser.add_argument(
+        "--images-dir",
+        default=None,
+        help=(
+            "Directory containing rendered preview images (<slug>.png). "
+            "Images are copied into the output directory and referenced in cards."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
     script_dir = Path(__file__).resolve().parent
     repo_root = Path(args.repo_root).resolve() if args.repo_root else script_dir.parent
 
-    build_site(repo_root, Path(args.output_dir))
+    images_dir = Path(args.images_dir).resolve() if args.images_dir else None
+    build_site(repo_root, Path(args.output_dir), images_dir)
     return 0
 
 
