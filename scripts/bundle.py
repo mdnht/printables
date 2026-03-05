@@ -298,15 +298,19 @@ def tree_shake(source: str) -> str:
     # Seed reachability with identifiers from top-level code that match a
     # known definition name.
     needed: set[str] = set()
-    queue = list(set(_IDENT_RE.findall(top_code)) & defs_by_name.keys())
+    queue = [
+        ident
+        for ident in _IDENT_RE.findall(top_code)
+        if ident in defs_by_name
+    ]
     while queue:
         name = queue.pop()
         if name in needed:
             continue
         needed.add(name)
         for d in defs_by_name.get(name, []):
-            for dep in set(_IDENT_RE.findall(clean[d.start : d.end])) & defs_by_name.keys():
-                if dep not in needed:
+            for dep in _IDENT_RE.findall(clean[d.start : d.end]):
+                if dep in defs_by_name and dep not in needed:
                     queue.append(dep)
 
     # Collect regions to remove, expanding each to cover preceding comments.
@@ -334,7 +338,7 @@ def tree_shake(source: str) -> str:
     for s, e in reversed(merged):
         result = result[:s] + result[e:]
 
-    # Collapse runs of 3+ blank lines into 2.
+    # Collapse excessive consecutive blank lines (3+ → 2).
     result = re.sub(r"\n{4,}", "\n\n\n", result)
 
     removed = sum(len(ds) for name, ds in defs_by_name.items() if name not in needed)
