@@ -8,7 +8,7 @@ Reads the HTML template and stylesheet from ``site/``, scans
 
 Usage
 -----
-    python scripts/generate_catalog.py [--output-dir _site] [--repo-root .] [--images-dir images]
+    python scripts/generate_catalog.py [--output-dir _site] [--repo-root .] [--images-dir images] [--downloads-dir downloads]
 """
 
 import argparse
@@ -90,7 +90,7 @@ def render_card(
         zip_path = downloads_dir / f"{slug}.zip"
         if zip_path.is_file():
             dl_icon = (
-                '<svg class="dl-icon" viewBox="0 0 24 24" fill="none" '
+                '<svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" '
                 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
                 'stroke-linejoin="round">'
                 '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'

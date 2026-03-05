@@ -14,6 +14,7 @@ printables/
 │       ├── build.yml              # CI/CD：変更検知 → バンドル → アーティファクトのアップロード
 │       └── deploy-site.yml        # カタログサイトのビルド → GitHub Pages デプロイ
 ├── libs/
+│   ├── BOSL2/                     # BOSL2 ライブラリ（git submodule）
 │   └── common.scad                # 共通 OpenSCAD ユーティリティモジュール
 ├── projects/
 │   └── example-box/               # サンプルプロジェクト（パラメトリック収納ボックス）
@@ -123,18 +124,22 @@ MakerWorld・Printables・Thingiverse などのサイトへ直接アップロー
 
 ### カタログサイト（GitHub Pages）
 
-`.github/workflows/deploy-site.yml` は `site/`・`projects/**/project.json`・`scripts/generate_catalog.py` への  
-変更時に自動実行され、カタログサイトを GitHub Pages にデプロイします。
+`.github/workflows/deploy-site.yml` は Build 3D Models ワークフロー完了時（`workflow_run`）、
+`site/` やワークフローファイル自体への変更時、および手動実行（`workflow_dispatch`）で自動実行されます。
+最新の成功ビルドからアーティファクトをダウンロードし、プレビュー画像とバンドル済み `.scad` を含む
+プロジェクトごとの zip アーカイブを作成してカタログサイトに組み込み、GitHub Pages にデプロイします。
 
 | ステップ | 内容 |
 |---|---|
-| **build** | `site/` のテンプレートとプロジェクトメタデータから `_site/index.html` を生成します。 |
+| **build** | ビルドアーティファクトをダウンロードし、`site/` のテンプレートとプロジェクトメタデータから `_site/index.html` を生成します。各プロジェクトカードにはダウンロードボタン（zip アーカイブ）が含まれます。 |
 | **deploy** | 生成されたサイトを GitHub Pages にデプロイします。 |
 
 #### ローカルプレビュー
 
 ```bash
 python scripts/generate_catalog.py --output-dir _site --repo-root .
+# ダウンロードボタン付きで生成する場合（事前にビルドアーティファクトを配置）:
+# python scripts/generate_catalog.py --output-dir _site --repo-root . --images-dir _site/images --downloads-dir _site/downloads
 # 生成された _site/index.html をブラウザで開いてください
 ```
 
