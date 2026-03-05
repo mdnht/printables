@@ -31,7 +31,7 @@ $image_html  <h2>$name</h2>
     <span>by $author</span>
   </div>
   <div class="tags">$tags_html</div>
-</article>""")
+$downloads_html</article>""")
 
 
 def load_projects(repo_root: Path) -> list[dict]:
@@ -59,7 +59,11 @@ def load_projects(repo_root: Path) -> list[dict]:
     return results
 
 
-def render_card(project: dict, images_dir: Path | None = None) -> str:
+def render_card(
+    project: dict,
+    images_dir: Path | None = None,
+    downloads_dir: Path | None = None,
+) -> str:
     """Render a single project card from metadata."""
     tags = project.get("tags", [])
     if not isinstance(tags, list):
@@ -79,6 +83,25 @@ def render_card(project: dict, images_dir: Path | None = None) -> str:
                 f' alt="{html.escape(project.get("name", slug))}" loading="lazy">\n'
             )
 
+    # Build download links when artifacts are available.
+    downloads_html = ""
+    if downloads_dir and slug:
+        links: list[str] = []
+        scad_path = downloads_dir / f"{slug}.scad"
+        if scad_path.is_file():
+            links.append(
+                f'<a class="dl-btn" href="downloads/{urllib.parse.quote(slug)}.scad"'
+                f' download>📦 .scad</a>'
+            )
+        png_path = downloads_dir / f"{slug}.png"
+        if png_path.is_file():
+            links.append(
+                f'<a class="dl-btn" href="downloads/{urllib.parse.quote(slug)}.png"'
+                f' download>🖼️ .png</a>'
+            )
+        if links:
+            downloads_html = f'  <div class="downloads">{"".join(links)}</div>\n'
+
     return _CARD_TEMPLATE.substitute(
         name=html.escape(project.get("name", "unknown")),
         description=html.escape(project.get("description", "")),
@@ -86,10 +109,16 @@ def render_card(project: dict, images_dir: Path | None = None) -> str:
         author=html.escape(project.get("author", "unknown")),
         tags_html=tags_html,
         image_html=image_html,
+        downloads_html=downloads_html,
     )
 
 
-def build_site(repo_root: Path, out_dir: Path, images_dir: Path | None = None) -> None:
+def build_site(
+    repo_root: Path,
+    out_dir: Path,
+    images_dir: Path | None = None,
+    downloads_dir: Path | None = None,
+) -> None:
     """Build the catalog site from source templates and project metadata."""
     site_dir = repo_root / "site"
 
@@ -112,7 +141,9 @@ def build_site(repo_root: Path, out_dir: Path, images_dir: Path | None = None) -
     if not projects:
         catalog_html = '<p class="empty">公開されているプロジェクトはありません。</p>'
     else:
-        cards = "\n".join(render_card(p, images_dir) for p in projects)
+        cards = "\n".join(
+            render_card(p, images_dir, downloads_dir) for p in projects
+        )
         catalog_html = f'<div class="grid">\n{cards}\n</div>'
 
     # Replace template placeholders
@@ -168,6 +199,15 @@ def main(argv: list[str] | None = None) -> int:
             "Images are copied into the output directory and referenced in cards."
         ),
     )
+    parser.add_argument(
+        "--downloads-dir",
+        default=None,
+        help=(
+            "Directory containing downloadable build artifacts "
+            "(<slug>.scad, <slug>.png). When present, download buttons "
+            "are added to the project cards."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -175,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
     repo_root = Path(args.repo_root).resolve() if args.repo_root else script_dir.parent
 
     images_dir = Path(args.images_dir).resolve() if args.images_dir else None
-    build_site(repo_root, Path(args.output_dir), images_dir)
+    downloads_dir = Path(args.downloads_dir).resolve() if args.downloads_dir else None
+    build_site(repo_root, Path(args.output_dir), images_dir, downloads_dir)
     return 0
 
 
