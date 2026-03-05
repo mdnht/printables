@@ -18,12 +18,20 @@ shared libraries in `libs/` follow this convention.
 Usage
 -----
     python scripts/bundle.py <main.scad> [-o <output.scad>] [-I <search_dir>] ...
+                             [--exclude <prefix>] ... [--tree-shake]
 
 Arguments
 ---------
     main.scad        Path to the top-level project file.
     -o, --output     Output file path.  Defaults to stdout.
     -I, --include    Additional search directories (may be repeated).
+    --exclude        Path prefix to exclude from inlining (may be repeated).
+                     Directives whose path starts with an excluded prefix are
+                     kept as-is in the output so the end-user can provide the
+                     library at render time.  Example: ``--exclude BOSL2``.
+    --tree-shake     Remove unused module/function definitions from the bundled
+                     output.  Useful when inlining large libraries (e.g. BOSL2)
+                     to produce a small, self-contained single file.
     --repo-root      Repository root directory.  Defaults to the directory
                      containing this script's parent.
 """
@@ -63,13 +71,37 @@ def resolve_path(ref_path: str, current_dir: Path, search_dirs: list[Path]) -> P
     return None
 
 
+def _normalize_path_prefix(path: str) -> str:
+    """Normalize a path or prefix for consistent comparison."""
+    path = path.replace("\\", "/")
+    while path.startswith("./"):
+        path = path[2:]
+    if path and path != "/":
+        path = path.rstrip("/")
+    return path
+
+
+def _is_excluded(ref_path: str, exclude_prefixes: list[str]) -> bool:
+    """Return True if *ref_path* starts with any of the excluded prefixes."""
+    normalized_ref = _normalize_path_prefix(ref_path)
+    for prefix in exclude_prefixes:
+        normalized_prefix = _normalize_path_prefix(prefix)
+        if not normalized_prefix:
+            continue
+        if normalized_ref == normalized_prefix or normalized_ref.startswith(normalized_prefix + "/"):
+            return True
+    return False
+
+
 def bundle_file(
     file_path: Path,
     search_dirs: list[Path],
     visited: set[Path],
+    exclude_prefixes: list[str] | None = None,
 ) -> str:
     """Recursively inline all resolvable use/include directives."""
     file_path = file_path.resolve()
+    exclude_prefixes = exclude_prefixes or []
 
     if file_path in visited:
         # Already inlined – emit a comment instead of duplicating content.
@@ -90,16 +122,21 @@ def bundle_file(
         lines.append(source[cursor : match.start()])
 
         ref_path = match.group("path")
-        resolved = resolve_path(ref_path, file_path.parent, search_dirs)
 
-        if resolved is not None:
-            lines.append(SECTION_START.format(path=resolved.name))
-            lines.append(bundle_file(resolved, search_dirs, visited))
-            lines.append(SECTION_END.format(path=resolved.name))
-        else:
-            # Cannot resolve – keep original directive so downstream tooling
-            # (e.g. OpenSCAD with MCAD installed) can still handle it.
+        if _is_excluded(ref_path, exclude_prefixes):
+            # Excluded library – keep the directive as-is for the end-user.
             lines.append(match.group(0) + "\n")
+        else:
+            resolved = resolve_path(ref_path, file_path.parent, search_dirs)
+
+            if resolved is not None:
+                lines.append(SECTION_START.format(path=resolved.name))
+                lines.append(bundle_file(resolved, search_dirs, visited, exclude_prefixes))
+                lines.append(SECTION_END.format(path=resolved.name))
+            else:
+                # Cannot resolve – keep original directive so downstream tooling
+                # (e.g. OpenSCAD with MCAD installed) can still handle it.
+                lines.append(match.group(0) + "\n")
 
         cursor = match.end()
 
@@ -107,6 +144,246 @@ def bundle_file(
     lines.append(source[cursor:])
 
     return "".join(lines)
+
+
+# ── Tree-shaking ─────────────────────────────────────────────────────────────
+
+
+class _Definition:
+    """A parsed module or function definition with its position in source."""
+
+    __slots__ = ("name", "kind", "start", "end")
+
+    def __init__(self, name: str, kind: str, start: int, end: int) -> None:
+        self.name = name
+        self.kind = kind
+        self.start = start
+        self.end = end
+
+
+def _sanitize_source(source: str) -> str:
+    """Replace comments and string literals with spaces, preserving positions.
+
+    Newlines are kept so that ``^`` anchors in regexes still work correctly and
+    character offsets map 1-to-1 back to the original *source*.
+    """
+    out = list(source)
+    i, n = 0, len(source)
+    while i < n:
+        c = source[i]
+        if c == '"':
+            out[i] = " "
+            i += 1
+            while i < n:
+                if source[i] == "\\" and i + 1 < n:
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                elif source[i] == '"':
+                    out[i] = " "
+                    i += 1
+                    break
+                else:
+                    if source[i] != "\n":
+                        out[i] = " "
+                    i += 1
+        elif c == "/" and i + 1 < n and source[i + 1] == "/":
+            while i < n and source[i] != "\n":
+                out[i] = " "
+                i += 1
+        elif c == "/" and i + 1 < n and source[i + 1] == "*":
+            out[i] = out[i + 1] = " "
+            i += 2
+            while i < n:
+                if source[i] == "*" and i + 1 < n and source[i + 1] == "/":
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                    break
+                if source[i] != "\n":
+                    out[i] = " "
+                i += 1
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _find_matching(clean: str, pos: int, open_ch: str, close_ch: str) -> int:
+    """Return the position *after* the matching *close_ch*.
+
+    *pos* must point at an *open_ch* character.
+    """
+    depth, i, n = 0, pos, len(clean)
+    while i < n:
+        if clean[i] == open_ch:
+            depth += 1
+        elif clean[i] == close_ch:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return n
+
+
+_DEF_RE = re.compile(r"^(module|function)\s+(\w+)\s*\(", re.MULTILINE)
+
+
+def _parse_definitions(clean: str) -> list[_Definition]:
+    """Find all ``module`` and ``function`` definitions in *clean* source."""
+    defs: list[_Definition] = []
+    for m in _DEF_RE.finditer(clean):
+        kind, name = m.group(1), m.group(2)
+        paren_end = _find_matching(clean, m.end() - 1, "(", ")")
+
+        if kind == "module":
+            j = paren_end
+            while j < len(clean) and clean[j] in " \t\n\r":
+                j += 1
+            if j >= len(clean):
+                continue
+            if clean[j] == "{":
+                end = _find_matching(clean, j, "{", "}")
+            else:
+                semi = clean.find(";", j)
+                end = semi + 1 if semi != -1 else len(clean)
+        else:  # function
+            j = paren_end
+            while j < len(clean) and clean[j] in " \t\n\r":
+                j += 1
+            if j >= len(clean) or clean[j] != "=":
+                continue
+            semi = clean.find(";", j + 1)
+            end = semi + 1 if semi != -1 else len(clean)
+
+        defs.append(_Definition(name, kind, m.start(), end))
+    return defs
+
+
+def _expand_to_comments(source: str, start: int) -> int:
+    """Walk *start* backward over preceding ``//`` comment and blank lines."""
+    nl = source.rfind("\n", 0, start)
+    pos = nl + 1 if nl >= 0 else 0
+    while pos > 0:
+        prev_nl = source.rfind("\n", 0, pos - 1)
+        line_start = prev_nl + 1 if prev_nl >= 0 else 0
+        line = source[line_start : pos - 1]
+        stripped = line.strip()
+        if stripped == "" or stripped.startswith("//"):
+            pos = line_start
+        else:
+            break
+    return pos
+
+
+_IDENT_RE = re.compile(r"\b([a-zA-Z_]\w*)\b")
+
+
+def tree_shake(source: str) -> str:
+    """Remove unreachable ``module``/``function`` definitions from *source*.
+
+    Only top-level definitions (not nested inside others) are candidates for
+    removal.  All variable assignments, ``assert`` calls, and other non-
+    definition top-level code is kept unconditionally.
+
+    Reachability is determined by scanning identifiers: a definition is kept
+    when its name appears (transitively) in code that is executed at the top
+    level.
+    """
+    clean = _sanitize_source(source)
+    all_defs = _parse_definitions(clean)
+
+    # Determine top-level definitions (not nested inside others) using a
+    # sort + stack sweep in O(n log n) instead of pairwise O(n²) checks.
+    # Sort by start position; ties broken by largest span first (−end) so
+    # outer definitions appear before their nested children.
+    sorted_defs = sorted(all_defs, key=lambda d: (d.start, -d.end))
+    top_defs: list[_Definition] = []
+    stack: list[_Definition] = []
+    for d in sorted_defs:
+        while stack and d.start >= stack[-1].end:
+            stack.pop()
+        is_nested = (
+            stack
+            and stack[-1].start < d.start
+            and d.end <= stack[-1].end
+        )
+        if not is_nested:
+            top_defs.append(d)
+        stack.append(d)
+    if not top_defs:
+        return source
+
+    defs_by_name: dict[str, list[_Definition]] = {}
+    for d in top_defs:
+        defs_by_name.setdefault(d.name, []).append(d)
+
+    # Mask definition bodies so only top-level code remains.
+    masked = list(clean)
+    for d in top_defs:
+        for i in range(d.start, d.end):
+            if masked[i] != "\n":
+                masked[i] = " "
+    top_code = "".join(masked)
+
+    # Seed reachability with identifiers from top-level code that match a
+    # known definition name.
+    needed: set[str] = set()
+    queue = [
+        ident
+        for ident in _IDENT_RE.findall(top_code)
+        if ident in defs_by_name
+    ]
+    while queue:
+        name = queue.pop()
+        if name in needed:
+            continue
+        needed.add(name)
+        for d in defs_by_name.get(name, []):
+            for dep in _IDENT_RE.findall(clean[d.start : d.end]):
+                if dep in defs_by_name and dep not in needed:
+                    queue.append(dep)
+
+    # Collect regions to remove, expanding each to cover preceding comments.
+    regions: list[tuple[int, int]] = []
+    for name, ds in defs_by_name.items():
+        if name not in needed:
+            for d in ds:
+                r_start = _expand_to_comments(source, d.start)
+                regions.append((r_start, d.end))
+
+    if not regions:
+        return source
+
+    # Merge overlapping / adjacent regions, then remove from end to start.
+    regions.sort()
+    merged: list[tuple[int, int]] = [regions[0]]
+    for s, e in regions[1:]:
+        ps, pe = merged[-1]
+        if s <= pe:
+            merged[-1] = (ps, max(pe, e))
+        else:
+            merged.append((s, e))
+
+    # Build the result in one pass by collecting the kept spans between
+    # merged removal regions, avoiding repeated string slicing.
+    parts: list[str] = []
+    prev_end = 0
+    for s, e in merged:
+        if s > prev_end:
+            parts.append(source[prev_end:s])
+        prev_end = e
+    if prev_end < len(source):
+        parts.append(source[prev_end:])
+    result = "".join(parts)
+
+    # Collapse excessive consecutive blank lines (3+ → 2).
+    result = re.sub(r"\n{4,}", "\n\n\n", result)
+
+    removed = sum(len(ds) for name, ds in defs_by_name.items() if name not in needed)
+    kept = sum(len(ds) for name, ds in defs_by_name.items() if name in needed)
+    print(
+        f"Tree-shake: kept {kept}, removed {removed} of {kept + removed} definitions",
+        file=sys.stderr,
+    )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,6 +412,28 @@ def main(argv: list[str] | None = None) -> int:
             "script (i.e. the repo root when the script lives in scripts/)."
         ),
     )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        dest="exclude_prefixes",
+        default=[],
+        metavar="PREFIX",
+        help=(
+            "Path prefix to exclude from inlining (repeatable).  Directives "
+            "whose path starts with PREFIX are kept as-is.  "
+            "Example: --exclude BOSL2"
+        ),
+    )
+    parser.add_argument(
+        "--tree-shake",
+        action="store_true",
+        default=False,
+        help=(
+            "Remove unused module and function definitions from the bundled "
+            "output (tree-shaking).  Useful when inlining large libraries "
+            "like BOSL2 to produce a small, self-contained single file."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -155,7 +454,12 @@ def main(argv: list[str] | None = None) -> int:
     ]
 
     visited: set[Path] = set()
-    bundled = BUNDLE_HEADER + bundle_file(input_path, search_dirs, visited)
+    bundled = BUNDLE_HEADER + bundle_file(
+        input_path, search_dirs, visited, args.exclude_prefixes,
+    )
+
+    if args.tree_shake:
+        bundled = tree_shake(bundled)
 
     if args.output and args.output != "-":
         out_path = Path(args.output)
