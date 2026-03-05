@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-generate_catalog.py – Generate a static HTML catalog page for all published
-OpenSCAD projects in the repository.
+generate_catalog.py – Build the catalog site from source templates.
 
-The script scans ``projects/*/project.json`` for metadata, filters by the
-``publish`` flag, and writes a self-contained ``index.html`` to the specified
-output directory.
+Reads the HTML template and stylesheet from ``site/``, scans
+``projects/*/project.json`` for metadata, and writes a self-contained
+``index.html`` to the output directory.
 
 Usage
 -----
@@ -17,57 +16,19 @@ import html
 import json
 import sys
 from pathlib import Path
+from string import Template
 
-HTML_TEMPLATE = """\
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>3D Model Catalog</title>
-<style>
-*,*::before,*::after{box-sizing:border-box}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  color:#1a1a2e;background:#f5f6fa;line-height:1.6}
-header{background:linear-gradient(135deg,#0f3460,#16213e);color:#fff;padding:2rem 1rem;text-align:center}
-header h1{margin:0 0 .25rem;font-size:1.75rem}
-header p{margin:0;opacity:.85;font-size:.95rem}
-main{max-width:960px;margin:2rem auto;padding:0 1rem}
-.empty{text-align:center;color:#888;margin-top:3rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.25rem}
-.card{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);
-  padding:1.5rem;display:flex;flex-direction:column;transition:box-shadow .2s}
-.card:hover{box-shadow:0 4px 16px rgba(0,0,0,.13)}
-.card h2{margin:0 0 .5rem;font-size:1.2rem}
-.card .desc{flex:1;color:#444;font-size:.9rem;margin-bottom:.75rem}
-.meta{font-size:.8rem;color:#666;display:flex;flex-wrap:wrap;gap:.35rem .75rem;margin-bottom:.5rem}
-.tags{display:flex;flex-wrap:wrap;gap:.35rem}
-.tag{background:#e8eaf6;color:#3949ab;border-radius:4px;padding:.15rem .5rem;font-size:.75rem}
-footer{text-align:center;color:#aaa;font-size:.8rem;padding:2rem 1rem}
-</style>
-</head>
-<body>
-<header>
-  <h1>3D Model Catalog</h1>
-  <p>OpenSCAD プロジェクト一覧</p>
-</header>
-<main>
-{{content}}
-</main>
-<footer>Auto-generated from project metadata.</footer>
-</body>
-</html>
-"""
-
+# Inline template for individual project cards.
+# Uses $-prefixed placeholders to avoid conflicts with CSS braces.
 CARD_TEMPLATE = """\
 <article class="card">
-  <h2>{name}</h2>
-  <p class="desc">{description}</p>
+  <h2>$name</h2>
+  <p class="desc">$description</p>
   <div class="meta">
-    <span>v{version}</span>
-    <span>by {author}</span>
+    <span>v$version</span>
+    <span>by $author</span>
   </div>
-  <div class="tags">{tags_html}</div>
+  <div class="tags">$tags_html</div>
 </article>"""
 
 
@@ -95,11 +56,15 @@ def load_projects(repo_root: Path) -> list[dict]:
 
 
 def render_card(project: dict) -> str:
+    """Render a single project card from metadata."""
     tags = project.get("tags", [])
+    if not isinstance(tags, list):
+        tags = []
     tags_html = "".join(
-        f'<span class="tag">{html.escape(t)}</span>' for t in tags
+        f'<span class="tag">{html.escape(str(t))}</span>' for t in tags
     )
-    return CARD_TEMPLATE.format(
+    tmpl = Template(CARD_TEMPLATE)
+    return tmpl.safe_substitute(
         name=html.escape(project.get("name", "unknown")),
         description=html.escape(project.get("description", "")),
         version=html.escape(project.get("version", "0.0.0")),
@@ -108,19 +73,48 @@ def render_card(project: dict) -> str:
     )
 
 
-def generate_html(projects: list[dict]) -> str:
+def build_site(repo_root: Path, out_dir: Path) -> None:
+    """Build the catalog site from source templates and project metadata."""
+    site_dir = repo_root / "site"
+
+    template_path = site_dir / "index.html"
+    if not template_path.is_file():
+        print(f"ERROR: template not found: {template_path}", file=sys.stderr)
+        sys.exit(1)
+
+    style_path = site_dir / "style.css"
+    if not style_path.is_file():
+        print(f"ERROR: stylesheet not found: {style_path}", file=sys.stderr)
+        sys.exit(1)
+
+    template = template_path.read_text(encoding="utf-8")
+    style_css = style_path.read_text(encoding="utf-8")
+
+    projects = load_projects(repo_root)
+    print(f"Found {len(projects)} published project(s).", file=sys.stderr)
+
     if not projects:
-        content = '<p class="empty">公開されているプロジェクトはありません。</p>'
+        catalog_html = '<p class="empty">公開されているプロジェクトはありません。</p>'
     else:
         cards = "\n".join(render_card(p) for p in projects)
-        content = f'<div class="grid">\n{cards}\n</div>'
+        catalog_html = f'<div class="grid">\n{cards}\n</div>'
 
-    return HTML_TEMPLATE.replace("{{content}}", content)
+    # Replace template placeholders
+    output = template.replace(
+        "<!-- {{inline_style}} -->", f"<style>\n{style_css}</style>"
+    ).replace(
+        "<!-- {{catalog_content}} -->", catalog_html
+    )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / "index.html"
+    out_file.write_text(output, encoding="utf-8")
+    print(f"Catalog written to {out_file}", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Generate a static HTML catalog for published OpenSCAD projects."
+        description="Build the catalog site from source templates and project metadata."
     )
     parser.add_argument(
         "--output-dir",
@@ -141,16 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     script_dir = Path(__file__).resolve().parent
     repo_root = Path(args.repo_root).resolve() if args.repo_root else script_dir.parent
 
-    projects = load_projects(repo_root)
-    print(f"Found {len(projects)} published project(s).", file=sys.stderr)
-
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    out_file = out_dir / "index.html"
-    out_file.write_text(generate_html(projects), encoding="utf-8")
-    print(f"Catalog written to {out_file}", file=sys.stderr)
-
+    build_site(repo_root, Path(args.output_dir))
     return 0
 
 
