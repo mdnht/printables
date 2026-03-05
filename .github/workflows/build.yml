@@ -171,3 +171,43 @@ jobs:
           else
             echo "❌ One or more projects failed to build." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  # ── Deploy catalog site to GitHub Pages ────────────────────────────────────
+  deploy-catalog:
+    name: Deploy catalog site
+    needs: [detect-changes]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate catalog
+        run: python scripts/generate_catalog.py --output-dir _site --repo-root .
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

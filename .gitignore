@@ -1,5 +1,6 @@
 # Build output
 dist/
+_site/
 
 # OpenSCAD generated files
 *.stl
