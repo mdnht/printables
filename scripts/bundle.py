@@ -76,7 +76,7 @@ def _normalize_path_prefix(path: str) -> str:
     path = path.replace("\\", "/")
     while path.startswith("./"):
         path = path[2:]
-    if path != "/":
+    if path and path != "/":
         path = path.rstrip("/")
     return path
 
@@ -292,6 +292,8 @@ def tree_shake(source: str) -> str:
 
     # Determine top-level definitions (not nested inside others) using a
     # sort + stack sweep in O(n log n) instead of pairwise O(n²) checks.
+    # Sort by start position; ties broken by largest span first (−end) so
+    # outer definitions appear before their nested children.
     sorted_defs = sorted(all_defs, key=lambda d: (d.start, -d.end))
     top_defs: list[_Definition] = []
     stack: list[_Definition] = []
@@ -299,7 +301,7 @@ def tree_shake(source: str) -> str:
         while stack and d.start >= stack[-1].end:
             stack.pop()
         is_nested = (
-            bool(stack)
+            stack
             and stack[-1].start < d.start
             and d.end <= stack[-1].end
         )
