@@ -9,9 +9,9 @@ on:
     branches:
       - main
     paths:
+      # Only paths that do NOT trigger the Build workflow.
+      # Model / script / project.json changes trigger Build → workflow_run → here.
       - 'site/**'
-      - 'projects/**/project.json'
-      - 'scripts/generate_catalog.py'
       - '.github/workflows/deploy-site.yml'
   workflow_dispatch:
 
