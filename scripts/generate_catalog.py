@@ -16,6 +16,7 @@ import html
 import json
 import shutil
 import sys
+import urllib.parse
 from pathlib import Path
 from string import Template
 
@@ -74,7 +75,7 @@ def render_card(project: dict, images_dir: Path | None = None) -> str:
         img_path = images_dir / f"{slug}.png"
         if img_path.is_file():
             image_html = (
-                f'  <img class="card-preview" src="images/{html.escape(slug)}.png"'
+                f'  <img class="card-preview" src="images/{urllib.parse.quote(slug)}.png"'
                 f' alt="{html.escape(project.get("name", slug))}" loading="lazy">\n'
             )
 
