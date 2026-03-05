@@ -1,0 +1,8 @@
+{
+    "name": "example-box",
+    "description": "A simple parametric storage box with lid",
+    "version": "1.0.0",
+    "author": "mdnht",
+    "tags": ["box", "storage", "parametric"],
+    "publish": true
+}

@@ -1,0 +1,24 @@
+# Build output
+dist/
+
+# OpenSCAD generated files
+*.stl
+*.amf
+*.3mf
+*.dxf
+*.svg
+*.png
+*.echo
+*.ast
+*.term
+*.jscad
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+*.swp
+*.swo
+*~
