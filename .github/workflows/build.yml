@@ -125,6 +125,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -138,6 +140,7 @@ jobs:
           python scripts/bundle.py \
             "projects/$PROJECT/main.scad" \
             --repo-root . \
+            --exclude BOSL2 \
             -o "dist/$PROJECT.scad"
 
       - name: Upload bundled scad artifact

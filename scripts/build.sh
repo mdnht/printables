@@ -39,6 +39,7 @@ build_project() {
     python3 "${SCRIPTS_DIR}/bundle.py" \
         "${main_scad}" \
         --repo-root "${REPO_ROOT}" \
+        --exclude BOSL2 \
         -o "${out_file}"
     log "  → ${out_file}"
 }

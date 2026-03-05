@@ -18,12 +18,17 @@ shared libraries in `libs/` follow this convention.
 Usage
 -----
     python scripts/bundle.py <main.scad> [-o <output.scad>] [-I <search_dir>] ...
+                             [--exclude <prefix>] ...
 
 Arguments
 ---------
     main.scad        Path to the top-level project file.
     -o, --output     Output file path.  Defaults to stdout.
     -I, --include    Additional search directories (may be repeated).
+    --exclude        Path prefix to exclude from inlining (may be repeated).
+                     Directives whose path starts with an excluded prefix are
+                     kept as-is in the output so the end-user can provide the
+                     library at render time.  Example: ``--exclude BOSL2``.
     --repo-root      Repository root directory.  Defaults to the directory
                      containing this script's parent.
 """
@@ -63,13 +68,23 @@ def resolve_path(ref_path: str, current_dir: Path, search_dirs: list[Path]) -> P
     return None
 
 
+def _is_excluded(ref_path: str, exclude_prefixes: list[str]) -> bool:
+    """Return True if *ref_path* starts with any of the excluded prefixes."""
+    for prefix in exclude_prefixes:
+        if ref_path == prefix or ref_path.startswith(prefix + "/"):
+            return True
+    return False
+
+
 def bundle_file(
     file_path: Path,
     search_dirs: list[Path],
     visited: set[Path],
+    exclude_prefixes: list[str] | None = None,
 ) -> str:
     """Recursively inline all resolvable use/include directives."""
     file_path = file_path.resolve()
+    exclude_prefixes = exclude_prefixes or []
 
     if file_path in visited:
         # Already inlined – emit a comment instead of duplicating content.
@@ -90,16 +105,21 @@ def bundle_file(
         lines.append(source[cursor : match.start()])
 
         ref_path = match.group("path")
-        resolved = resolve_path(ref_path, file_path.parent, search_dirs)
 
-        if resolved is not None:
-            lines.append(SECTION_START.format(path=resolved.name))
-            lines.append(bundle_file(resolved, search_dirs, visited))
-            lines.append(SECTION_END.format(path=resolved.name))
-        else:
-            # Cannot resolve – keep original directive so downstream tooling
-            # (e.g. OpenSCAD with MCAD installed) can still handle it.
+        if _is_excluded(ref_path, exclude_prefixes):
+            # Excluded library – keep the directive as-is for the end-user.
             lines.append(match.group(0) + "\n")
+        else:
+            resolved = resolve_path(ref_path, file_path.parent, search_dirs)
+
+            if resolved is not None:
+                lines.append(SECTION_START.format(path=resolved.name))
+                lines.append(bundle_file(resolved, search_dirs, visited, exclude_prefixes))
+                lines.append(SECTION_END.format(path=resolved.name))
+            else:
+                # Cannot resolve – keep original directive so downstream tooling
+                # (e.g. OpenSCAD with MCAD installed) can still handle it.
+                lines.append(match.group(0) + "\n")
 
         cursor = match.end()
 
@@ -135,6 +155,18 @@ def main(argv: list[str] | None = None) -> int:
             "script (i.e. the repo root when the script lives in scripts/)."
         ),
     )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        dest="exclude_prefixes",
+        default=[],
+        metavar="PREFIX",
+        help=(
+            "Path prefix to exclude from inlining (repeatable).  Directives "
+            "whose path starts with PREFIX are kept as-is.  "
+            "Example: --exclude BOSL2"
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -155,7 +187,9 @@ def main(argv: list[str] | None = None) -> int:
     ]
 
     visited: set[Path] = set()
-    bundled = BUNDLE_HEADER + bundle_file(input_path, search_dirs, visited)
+    bundled = BUNDLE_HEADER + bundle_file(
+        input_path, search_dirs, visited, args.exclude_prefixes,
+    )
 
     if args.output and args.output != "-":
         out_path = Path(args.output)
