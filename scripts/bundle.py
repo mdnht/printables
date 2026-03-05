@@ -6,6 +6,15 @@ All `use <...>` and `include <...>` statements that reference files under the
 repository root are inlined recursively.  Third-party library paths that cannot
 be resolved are left as-is so the end-user can still install them separately.
 
+Limitation
+----------
+The bundler inlines both `use` and `include` directives identically (full file
+contents).  In OpenSCAD, `use` only imports modules/functions without executing
+top-level code, whereas `include` executes everything.  Therefore, library files
+referenced via `use` **must only contain module and function definitions** — no
+top-level geometry, variable assignments, or other executable statements.  All
+shared libraries in `libs/` follow this convention.
+
 Usage
 -----
     python scripts/bundle.py <main.scad> [-o <output.scad>] [-I <search_dir>] ...
@@ -20,7 +29,6 @@ Arguments
 """
 
 import argparse
-import os
 import re
 import sys
 from pathlib import Path

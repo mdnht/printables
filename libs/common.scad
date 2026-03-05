@@ -3,7 +3,7 @@
 // Usage:
 //   use <../../libs/common.scad>
 //
-// Provides: rounded_box, cylinder_with_hole, chamfer_box
+// Provides: rounded_box, cylinder_with_hole, chamfer_box, screw_hole
 
 // Rounded rectangular box
 // Parameters:

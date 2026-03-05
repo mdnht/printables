@@ -69,9 +69,14 @@ jobs:
 
             # Changes in libs/ or scripts/ → rebuild ALL projects
             if echo "$changed" | grep -qE '^(libs|scripts)/'; then
-              printf -v projects_json '"%s",' "${all_projects[@]:-}"
-              projects_json="[${projects_json%,}]"
-              any_changed="true"
+              if [ ${#all_projects[@]} -gt 0 ]; then
+                printf -v projects_json '"%s",' "${all_projects[@]:-}"
+                projects_json="[${projects_json%,}]"
+                any_changed="true"
+              else
+                projects_json='[]'
+                any_changed="false"
+              fi
             else
               # Collect only the projects whose files changed
               declare -A changed_set
@@ -127,11 +132,13 @@ jobs:
           python-version: '3.11'
 
       - name: Bundle project – ${{ matrix.project }}
+        env:
+          PROJECT: ${{ matrix.project }}
         run: |
           python scripts/bundle.py \
-            projects/${{ matrix.project }}/main.scad \
+            "projects/$PROJECT/main.scad" \
             --repo-root . \
-            -o dist/${{ matrix.project }}.scad
+            -o "dist/$PROJECT.scad"
 
       - name: Upload bundled scad artifact
         uses: actions/upload-artifact@v4
@@ -149,15 +156,18 @@ jobs:
     permissions: {}
     steps:
       - name: Report result
+        env:
+          PROJECTS: ${{ needs.detect-changes.outputs.projects }}
+          BUILD_RESULT: ${{ needs.build.result }}
         run: |
-          echo "### 3D Model Build Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Built projects: \`${{ needs.detect-changes.outputs.projects }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.build.result }}" == "success" ]]; then
-            echo "✅ All projects built successfully." >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ needs.build.result }}" == "skipped" ]]; then
-            echo "⏭️ No projects needed rebuilding." >> $GITHUB_STEP_SUMMARY
+          echo "### 3D Model Build Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Built projects: \`${PROJECTS}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$BUILD_RESULT" == "success" ]]; then
+            echo "✅ All projects built successfully." >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$BUILD_RESULT" == "skipped" ]]; then
+            echo "⏭️ No projects needed rebuilding." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "❌ One or more projects failed to build." >> $GITHUB_STEP_SUMMARY
+            echo "❌ One or more projects failed to build." >> "$GITHUB_STEP_SUMMARY"
           fi
