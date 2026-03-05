@@ -65,7 +65,7 @@ jobs:
             fi
           else
             # Determine changed files between HEAD and its parent
-            changed=$(git diff --name-only HEAD^ HEAD 2>/dev/null || git diff --name-only HEAD 2>/dev/null)
+            changed=$(git diff --name-only HEAD^ HEAD 2>/dev/null || git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null)
 
             # Changes in libs/ or scripts/ → rebuild ALL projects
             if echo "$changed" | grep -qE '^(libs|scripts)/'; then
