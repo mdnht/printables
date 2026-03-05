@@ -18,7 +18,7 @@ shared libraries in `libs/` follow this convention.
 Usage
 -----
     python scripts/bundle.py <main.scad> [-o <output.scad>] [-I <search_dir>] ...
-                             [--exclude <prefix>] ...
+                             [--exclude <prefix>] ... [--tree-shake]
 
 Arguments
 ---------
@@ -29,6 +29,9 @@ Arguments
                      Directives whose path starts with an excluded prefix are
                      kept as-is in the output so the end-user can provide the
                      library at render time.  Example: ``--exclude BOSL2``.
+    --tree-shake     Remove unused module/function definitions from the bundled
+                     output.  Useful when inlining large libraries (e.g. BOSL2)
+                     to produce a small, self-contained single file.
     --repo-root      Repository root directory.  Defaults to the directory
                      containing this script's parent.
 """
@@ -129,6 +132,220 @@ def bundle_file(
     return "".join(lines)
 
 
+# ── Tree-shaking ─────────────────────────────────────────────────────────────
+
+
+class _Definition:
+    """A parsed module or function definition with its position in source."""
+
+    __slots__ = ("name", "kind", "start", "end")
+
+    def __init__(self, name: str, kind: str, start: int, end: int) -> None:
+        self.name = name
+        self.kind = kind
+        self.start = start
+        self.end = end
+
+
+def _sanitize_source(source: str) -> str:
+    """Replace comments and string literals with spaces, preserving positions.
+
+    Newlines are kept so that ``^`` anchors in regexes still work correctly and
+    character offsets map 1-to-1 back to the original *source*.
+    """
+    out = list(source)
+    i, n = 0, len(source)
+    while i < n:
+        c = source[i]
+        if c == '"':
+            out[i] = " "
+            i += 1
+            while i < n:
+                if source[i] == "\\" and i + 1 < n:
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                elif source[i] == '"':
+                    out[i] = " "
+                    i += 1
+                    break
+                else:
+                    if source[i] != "\n":
+                        out[i] = " "
+                    i += 1
+        elif c == "/" and i + 1 < n and source[i + 1] == "/":
+            while i < n and source[i] != "\n":
+                out[i] = " "
+                i += 1
+        elif c == "/" and i + 1 < n and source[i + 1] == "*":
+            out[i] = out[i + 1] = " "
+            i += 2
+            while i < n:
+                if source[i] == "*" and i + 1 < n and source[i + 1] == "/":
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                    break
+                if source[i] != "\n":
+                    out[i] = " "
+                i += 1
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _find_matching(clean: str, pos: int, open_ch: str, close_ch: str) -> int:
+    """Return the position *after* the matching *close_ch*.
+
+    *pos* must point at an *open_ch* character.
+    """
+    depth, i, n = 0, pos, len(clean)
+    while i < n:
+        if clean[i] == open_ch:
+            depth += 1
+        elif clean[i] == close_ch:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return n
+
+
+_DEF_RE = re.compile(r"^(module|function)\s+(\w+)\s*\(", re.MULTILINE)
+
+
+def _parse_definitions(clean: str) -> list[_Definition]:
+    """Find all ``module`` and ``function`` definitions in *clean* source."""
+    defs: list[_Definition] = []
+    for m in _DEF_RE.finditer(clean):
+        kind, name = m.group(1), m.group(2)
+        paren_end = _find_matching(clean, m.end() - 1, "(", ")")
+
+        if kind == "module":
+            j = paren_end
+            while j < len(clean) and clean[j] in " \t\n\r":
+                j += 1
+            if j >= len(clean) or clean[j] != "{":
+                continue  # braceless one-liner – too small to matter
+            end = _find_matching(clean, j, "{", "}")
+        else:  # function
+            j = paren_end
+            while j < len(clean) and clean[j] in " \t\n\r":
+                j += 1
+            if j >= len(clean) or clean[j] != "=":
+                continue
+            semi = clean.find(";", j + 1)
+            end = semi + 1 if semi != -1 else len(clean)
+
+        defs.append(_Definition(name, kind, m.start(), end))
+    return defs
+
+
+def _expand_to_comments(source: str, start: int) -> int:
+    """Walk *start* backward over preceding ``//`` comment and blank lines."""
+    nl = source.rfind("\n", 0, start)
+    pos = nl + 1 if nl >= 0 else 0
+    while pos > 0:
+        prev_nl = source.rfind("\n", 0, pos - 1)
+        line_start = prev_nl + 1 if prev_nl >= 0 else 0
+        line = source[line_start : pos - 1]
+        stripped = line.strip()
+        if stripped == "" or stripped.startswith("//"):
+            pos = line_start
+        else:
+            break
+    return pos
+
+
+_IDENT_RE = re.compile(r"\b([a-zA-Z_]\w*)\b")
+
+
+def tree_shake(source: str) -> str:
+    """Remove unreachable ``module``/``function`` definitions from *source*.
+
+    Only top-level definitions (not nested inside others) are candidates for
+    removal.  All variable assignments, ``assert`` calls, and other non-
+    definition top-level code is kept unconditionally.
+
+    Reachability is determined by scanning identifiers: a definition is kept
+    when its name appears (transitively) in code that is executed at the top
+    level.
+    """
+    clean = _sanitize_source(source)
+    all_defs = _parse_definitions(clean)
+
+    # Keep only top-level definitions (not nested inside others).
+    top_defs = [
+        d
+        for d in all_defs
+        if not any(
+            o.start < d.start and d.end <= o.end for o in all_defs if o is not d
+        )
+    ]
+    if not top_defs:
+        return source
+
+    defs_by_name: dict[str, list[_Definition]] = {}
+    for d in top_defs:
+        defs_by_name.setdefault(d.name, []).append(d)
+
+    # Mask definition bodies so only top-level code remains.
+    masked = list(clean)
+    for d in top_defs:
+        for i in range(d.start, d.end):
+            if masked[i] != "\n":
+                masked[i] = " "
+    top_code = "".join(masked)
+
+    # Seed reachability with identifiers from top-level code that match a
+    # known definition name.
+    needed: set[str] = set()
+    queue = list(set(_IDENT_RE.findall(top_code)) & defs_by_name.keys())
+    while queue:
+        name = queue.pop()
+        if name in needed:
+            continue
+        needed.add(name)
+        for d in defs_by_name.get(name, []):
+            for dep in set(_IDENT_RE.findall(clean[d.start : d.end])) & defs_by_name.keys():
+                if dep not in needed:
+                    queue.append(dep)
+
+    # Collect regions to remove, expanding each to cover preceding comments.
+    regions: list[tuple[int, int]] = []
+    for name, ds in defs_by_name.items():
+        if name not in needed:
+            for d in ds:
+                r_start = _expand_to_comments(source, d.start)
+                regions.append((r_start, d.end))
+
+    if not regions:
+        return source
+
+    # Merge overlapping / adjacent regions, then remove from end to start.
+    regions.sort()
+    merged: list[tuple[int, int]] = [regions[0]]
+    for s, e in regions[1:]:
+        ps, pe = merged[-1]
+        if s <= pe:
+            merged[-1] = (ps, max(pe, e))
+        else:
+            merged.append((s, e))
+
+    result = source
+    for s, e in reversed(merged):
+        result = result[:s] + result[e:]
+
+    # Collapse runs of 3+ blank lines into 2.
+    result = re.sub(r"\n{4,}", "\n\n\n", result)
+
+    removed = sum(len(ds) for name, ds in defs_by_name.items() if name not in needed)
+    kept = sum(len(ds) for name, ds in defs_by_name.items() if name in needed)
+    print(
+        f"Tree-shake: kept {kept}, removed {removed} of {kept + removed} definitions",
+        file=sys.stderr,
+    )
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Bundle an OpenSCAD project into a single .scad file."
@@ -167,6 +384,16 @@ def main(argv: list[str] | None = None) -> int:
             "Example: --exclude BOSL2"
         ),
     )
+    parser.add_argument(
+        "--tree-shake",
+        action="store_true",
+        default=False,
+        help=(
+            "Remove unused module and function definitions from the bundled "
+            "output (tree-shaking).  Useful when inlining large libraries "
+            "like BOSL2 to produce a small, self-contained single file."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -190,6 +417,9 @@ def main(argv: list[str] | None = None) -> int:
     bundled = BUNDLE_HEADER + bundle_file(
         input_path, search_dirs, visited, args.exclude_prefixes,
     )
+
+    if args.tree_shake:
+        bundled = tree_shake(bundled)
 
     if args.output and args.output != "-":
         out_path = Path(args.output)
