@@ -1,5 +1,8 @@
 name: Build 3D Models
 
+env:
+  PREVIEW_IMGSIZE: '640,480'
+
 on:
   push:
     branches:
@@ -133,6 +136,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install OpenSCAD
+        run: sudo apt-get update && sudo apt-get install -y openscad xvfb
+
       - name: Bundle project – ${{ matrix.project }}
         env:
           PROJECT: ${{ matrix.project }}
@@ -143,12 +149,69 @@ jobs:
             --tree-shake \
             -o "dist/$PROJECT.scad"
 
+      - name: Render preview image – ${{ matrix.project }}
+        id: render
+        continue-on-error: true
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          xvfb-run -a openscad \
+            -o "dist/$PROJECT.png" \
+            --imgsize="${PREVIEW_IMGSIZE}" \
+            "projects/$PROJECT/main.scad"
+
       - name: Upload bundled scad artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.project }}
           path: dist/${{ matrix.project }}.scad
           if-no-files-found: error
+
+      - name: Upload preview image
+        if: steps.render.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-${{ matrix.project }}
+          path: dist/${{ matrix.project }}.png
+          if-no-files-found: warn
+
+  # ── Collect preview images ─────────────────────────────────────────────────
+  collect-previews:
+    name: Collect preview images
+    needs: build
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Download preview artifacts
+        id: download
+        uses: actions/download-artifact@v4
+        with:
+          pattern: preview-*
+          path: preview-downloads
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Flatten preview images
+        if: steps.download.outcome == 'success'
+        run: |
+          mkdir -p preview-images
+          if [ -d preview-downloads ]; then
+            find preview-downloads -name '*.png' -exec cp {} preview-images/ \;
+          fi
+          echo "Collected preview images:"
+          ls preview-images/ 2>/dev/null || echo "(none)"
+
+      - name: Ensure preview-images directory exists
+        run: mkdir -p preview-images
+
+      - name: Upload combined preview-images artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-images
+          path: preview-images/
+          if-no-files-found: warn
+          retention-days: 90
 
   # ── Summary ────────────────────────────────────────────────────────────────
   summary:

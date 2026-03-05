@@ -1,13 +1,17 @@
 name: Deploy Catalog Site
 
 on:
+  workflow_run:
+    workflows: ["Build 3D Models"]
+    types: [completed]
+    branches: [main]
   push:
     branches:
       - main
     paths:
+      # Only paths that do NOT trigger the Build workflow.
+      # Model / script / project.json changes trigger Build → workflow_run → here.
       - 'site/**'
-      - 'projects/**/project.json'
-      - 'scripts/generate_catalog.py'
       - '.github/workflows/deploy-site.yml'
   workflow_dispatch:
 
@@ -18,9 +22,14 @@ concurrency:
 jobs:
   build:
     name: Build catalog site
+    # Skip when triggered by a failed build workflow run.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,8 +39,31 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Download preview images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p _site/images
+          RUN_ID=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow build.yml \
+            --branch main \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            echo "Downloading preview images from build run $RUN_ID..."
+            gh run download "$RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              -n preview-images \
+              -D _site/images || echo "WARNING: No preview-images artifact found"
+          else
+            echo "WARNING: No successful build run found – building without preview images"
+          fi
+
       - name: Build site
-        run: python scripts/generate_catalog.py --output-dir _site --repo-root .
+        run: python scripts/generate_catalog.py --output-dir _site --repo-root . --images-dir _site/images
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
