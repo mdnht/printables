@@ -1,0 +1,8 @@
+{
+    "name": "toothbrush-holder",
+    "description": "歯ブラシホルダー",
+    "version": "0.1.0",
+    "author": "mdnht",
+    "tags": ["歯ブラシ", "ホルダー", "パラメトリック"],
+    "publish": true
+}
