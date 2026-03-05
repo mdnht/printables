@@ -64,7 +64,7 @@ def render_card(project: dict) -> str:
         f'<span class="tag">{html.escape(str(t))}</span>' for t in tags
     )
     tmpl = Template(CARD_TEMPLATE)
-    return tmpl.safe_substitute(
+    return tmpl.substitute(
         name=html.escape(project.get("name", "unknown")),
         description=html.escape(project.get("description", "")),
         version=html.escape(project.get("version", "0.0.0")),
