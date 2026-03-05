@@ -39,11 +39,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Download preview images
+      - name: Download build artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p _site/images
+          mkdir -p _site/images _site/downloads
           RUN_ID=$(gh run list \
             --repo "$GITHUB_REPOSITORY" \
             --workflow build.yml \
@@ -53,17 +53,34 @@ jobs:
             --json databaseId \
             --jq '.[0].databaseId')
           if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
-            echo "Downloading preview images from build run $RUN_ID..."
+            echo "Downloading artifacts from build run $RUN_ID..."
             gh run download "$RUN_ID" \
               --repo "$GITHUB_REPOSITORY" \
-              -n preview-images \
-              -D _site/images || echo "WARNING: No preview-images artifact found"
+              -D _dl || echo "WARNING: Failed to download artifacts"
+            # Copy preview images
+            if [ -d "_dl/preview-images" ]; then
+              cp _dl/preview-images/*.png _site/images/ 2>/dev/null || true
+            fi
+            # Copy bundled scad files and preview images to downloads
+            for dir in _dl/*/; do
+              name=$(basename "$dir")
+              # Skip preview-only artifacts
+              case "$name" in preview-*) continue;; esac
+              # Copy scad files
+              find "$dir" -name '*.scad' -exec cp {} _site/downloads/ \;
+              # Copy corresponding preview image for download
+              if [ -f "_site/images/${name}.png" ]; then
+                cp "_site/images/${name}.png" "_site/downloads/"
+              fi
+            done
+            echo "Downloads prepared:"
+            ls _site/downloads/ 2>/dev/null || echo "(none)"
           else
-            echo "WARNING: No successful build run found – building without preview images"
+            echo "WARNING: No successful build run found – building without artifacts"
           fi
 
       - name: Build site
-        run: python scripts/generate_catalog.py --output-dir _site --repo-root . --images-dir _site/images
+        run: python scripts/generate_catalog.py --output-dir _site --repo-root . --images-dir _site/images --downloads-dir _site/downloads
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

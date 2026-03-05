@@ -107,6 +107,35 @@ main {
   font-size: 0.75rem;
 }
 
+.downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.dl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #3949ab;
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.dl-btn:hover {
+  background: #283593;
+}
+
+.dl-icon {
+  width: 1em;
+  height: 1em;
+}
+
 footer {
   text-align: center;
   color: #aaa;
