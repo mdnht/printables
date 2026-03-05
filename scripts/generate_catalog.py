@@ -23,8 +23,7 @@ from string import Template
 # Uses $-prefixed placeholders to avoid conflicts with CSS braces.
 _CARD_TEMPLATE = Template("""\
 <article class="card">
-  $image_html
-  <h2>$name</h2>
+$image_html  <h2>$name</h2>
   <p class="desc">$description</p>
   <div class="meta">
     <span>v$version</span>
@@ -75,8 +74,8 @@ def render_card(project: dict, images_dir: Path | None = None) -> str:
         img_path = images_dir / f"{slug}.png"
         if img_path.is_file():
             image_html = (
-                f'<img class="card-preview" src="images/{html.escape(slug)}.png"'
-                f' alt="{html.escape(project.get("name", slug))}" loading="lazy">'
+                f'  <img class="card-preview" src="images/{html.escape(slug)}.png"'
+                f' alt="{html.escape(project.get("name", slug))}" loading="lazy">\n'
             )
 
     return _CARD_TEMPLATE.substitute(
