@@ -17,6 +17,7 @@ import json
 import shutil
 import sys
 import urllib.parse
+import zipfile
 from pathlib import Path
 from string import Template
 
@@ -83,24 +84,26 @@ def render_card(
                 f' alt="{html.escape(project.get("name", slug))}" loading="lazy">\n'
             )
 
-    # Build download links when artifacts are available.
+    # Build download link when a zip artifact is available.
     downloads_html = ""
     if downloads_dir and slug:
-        links: list[str] = []
-        scad_path = downloads_dir / f"{slug}.scad"
-        if scad_path.is_file():
-            links.append(
-                f'<a class="dl-btn" href="downloads/{urllib.parse.quote(slug)}.scad"'
-                f' download>📦 .scad</a>'
+        zip_path = downloads_dir / f"{slug}.zip"
+        if zip_path.is_file():
+            dl_icon = (
+                '<svg class="dl-icon" viewBox="0 0 24 24" fill="none" '
+                'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+                'stroke-linejoin="round">'
+                '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
+                '<polyline points="7 10 12 15 17 10"/>'
+                '<line x1="12" y1="15" x2="12" y2="3"/>'
+                '</svg>'
             )
-        png_path = downloads_dir / f"{slug}.png"
-        if png_path.is_file():
-            links.append(
-                f'<a class="dl-btn" href="downloads/{urllib.parse.quote(slug)}.png"'
-                f' download>🖼️ .png</a>'
+            downloads_html = (
+                f'  <div class="downloads">'
+                f'<a class="dl-btn" href="downloads/{urllib.parse.quote(slug)}.zip"'
+                f' download>{dl_icon} Download</a>'
+                f'</div>\n'
             )
-        if links:
-            downloads_html = f'  <div class="downloads">{"".join(links)}</div>\n'
 
     return _CARD_TEMPLATE.substitute(
         name=html.escape(project.get("name", "unknown")),
@@ -138,6 +141,24 @@ def build_site(
     projects = load_projects(repo_root)
     print(f"Found {len(projects)} published project(s).", file=sys.stderr)
 
+    # Create per-project zip archives from downloaded artifacts.
+    if downloads_dir and downloads_dir.is_dir():
+        for proj in projects:
+            slug = proj.get("_slug", "")
+            if not slug:
+                continue
+            files_to_zip: list[Path] = []
+            for ext in ("*.scad", "*.png"):
+                files_to_zip.extend(
+                    f for f in downloads_dir.glob(ext) if f.stem == slug
+                )
+            if files_to_zip:
+                zip_path = downloads_dir / f"{slug}.zip"
+                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for f in files_to_zip:
+                        zf.write(f, f.name)
+                print(f"Created {zip_path.name} ({len(files_to_zip)} file(s))", file=sys.stderr)
+
     if not projects:
         catalog_html = '<p class="empty">公開されているプロジェクトはありません。</p>'
     else:
@@ -172,6 +193,20 @@ def build_site(
         else:
             count = sum(1 for _ in dest_images.glob("*.png"))
             print(f"Using {count} preview image(s) in {dest_images}", file=sys.stderr)
+
+    # Copy zip archives to output directory.
+    if downloads_dir and downloads_dir.is_dir():
+        dest_dl = out_dir / "downloads"
+        dest_dl.mkdir(parents=True, exist_ok=True)
+        if downloads_dir.resolve() != dest_dl.resolve():
+            copied = 0
+            for zf in downloads_dir.glob("*.zip"):
+                shutil.copy2(zf, dest_dl / zf.name)
+                copied += 1
+            print(f"Copied {copied} download archive(s) to {dest_dl}", file=sys.stderr)
+        else:
+            count = sum(1 for _ in dest_dl.glob("*.zip"))
+            print(f"Using {count} download archive(s) in {dest_dl}", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
