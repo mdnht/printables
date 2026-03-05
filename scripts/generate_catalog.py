@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 from string import Template
 
-# Inline template for individual project cards.
+# Pre-compiled template for individual project cards.
 # Uses $-prefixed placeholders to avoid conflicts with CSS braces.
-CARD_TEMPLATE = """\
+_CARD_TEMPLATE = Template("""\
 <article class="card">
   <h2>$name</h2>
   <p class="desc">$description</p>
@@ -29,7 +29,7 @@ CARD_TEMPLATE = """\
     <span>by $author</span>
   </div>
   <div class="tags">$tags_html</div>
-</article>"""
+</article>""")
 
 
 def load_projects(repo_root: Path) -> list[dict]:
@@ -39,7 +39,7 @@ def load_projects(repo_root: Path) -> list[dict]:
         return []
 
     results: list[dict] = []
-    for project_json in sorted(projects_dir.glob("*/project.json")):
+    for project_json in projects_dir.glob("*/project.json"):
         try:
             data = json.loads(project_json.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as exc:
@@ -63,8 +63,7 @@ def render_card(project: dict) -> str:
     tags_html = "".join(
         f'<span class="tag">{html.escape(str(t))}</span>' for t in tags
     )
-    tmpl = Template(CARD_TEMPLATE)
-    return tmpl.substitute(
+    return _CARD_TEMPLATE.substitute(
         name=html.escape(project.get("name", "unknown")),
         description=html.escape(project.get("description", "")),
         version=html.escape(project.get("version", "0.0.0")),

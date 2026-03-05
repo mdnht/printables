@@ -11,17 +11,23 @@ OpenSCAD で記述された 3D モデルを統合管理するモノレポ。
 printables/
 ├── .github/
 │   └── workflows/
-│       └── build.yml          # CI/CD：変更検知 → バンドル → アーティファクトのアップロード
+│       ├── build.yml              # CI/CD：変更検知 → バンドル → アーティファクトのアップロード
+│       └── deploy-site.yml        # カタログサイトのビルド → GitHub Pages デプロイ
 ├── libs/
-│   └── common.scad            # 共通 OpenSCAD ユーティリティモジュール
+│   └── common.scad                # 共通 OpenSCAD ユーティリティモジュール
 ├── projects/
-│   └── example-box/           # サンプルプロジェクト（パラメトリック収納ボックス）
-│       ├── project.json       # プロジェクトメタデータ（名前・バージョン・作者など）
-│       └── main.scad          # メイン OpenSCAD ソースファイル
+│   └── example-box/               # サンプルプロジェクト（パラメトリック収納ボックス）
+│       ├── project.json           # プロジェクトメタデータ（名前・バージョン・作者など）
+│       └── main.scad              # メイン OpenSCAD ソースファイル
 ├── scripts/
-│   ├── build.sh               # ローカルビルド用ヘルパースクリプト
-│   └── bundle.py              # バンドラー：use/include を展開して単一 .scad に統合
-├── dist/                      # ビルド出力（git 管理対象外）
+│   ├── build.sh                   # ローカルビルド用ヘルパースクリプト
+│   ├── bundle.py                  # バンドラー：use/include を展開して単一 .scad に統合
+│   └── generate_catalog.py        # カタログサイト生成スクリプト
+├── site/
+│   ├── index.html                 # カタログサイトの HTML テンプレート
+│   └── style.css                  # カタログサイトのスタイルシート
+├── dist/                          # ビルド出力（git 管理対象外）
+├── _site/                         # カタログサイト出力（git 管理対象外）
 └── .gitignore
 ```
 
@@ -114,3 +120,22 @@ bash scripts/build.sh example-box
 MakerWorld・Printables・Thingiverse などのサイトへ直接アップロードして公開できます。
 
 **Actions → Build 3D Models → Run workflow** の UI から特定プロジェクトのみを手動ビルドすることも可能です。
+
+### カタログサイト（GitHub Pages）
+
+`.github/workflows/deploy-site.yml` は `site/`・`projects/**/project.json`・`scripts/generate_catalog.py` への  
+変更時に自動実行され、カタログサイトを GitHub Pages にデプロイします。
+
+| ステップ | 内容 |
+|---|---|
+| **build** | `site/` のテンプレートとプロジェクトメタデータから `_site/index.html` を生成します。 |
+| **deploy** | 生成されたサイトを GitHub Pages にデプロイします。 |
+
+#### ローカルプレビュー
+
+```bash
+python scripts/generate_catalog.py --output-dir _site --repo-root .
+# 生成された _site/index.html をブラウザで開いてください
+```
+
+> **初回セットアップ**: GitHub Pages を有効にするには **Settings → Pages → Source → GitHub Actions** を選択してください。
