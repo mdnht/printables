@@ -45,6 +45,15 @@ jobs:
         run: |
           mkdir -p _site/images _site/downloads
 
+          # Get the current GitHub Pages URL for fallback when artifacts expire.
+          PAGES_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" \
+            --jq '.html_url // empty' 2>/dev/null || true)
+          # Ensure URL ends with /
+          if [ -n "$PAGES_URL" ] && [[ "$PAGES_URL" != */ ]]; then
+            PAGES_URL="${PAGES_URL}/"
+          fi
+          echo "GitHub Pages URL for fallback: ${PAGES_URL:-not available}"
+
           # Collect all project directory names
           projects=()
           for dir in projects/*/; do
@@ -55,39 +64,71 @@ jobs:
 
           # For each project, download the latest scad and preview artifacts
           # from any successful build run (not just the most recent one).
+          # When artifacts have expired, fall back to the deployed Pages site.
           for proj in "${projects[@]}"; do
             echo "--- Fetching artifacts for: $proj ---"
+            got_scad=false
+            got_preview=false
 
-            # Download latest bundled scad artifact (skip expired)
+            # ── scad artifact ──
             scad_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${proj}&per_page=5" \
               --jq '[.artifacts[] | select(.expired == false)][0].id // empty' 2>/dev/null || true)
             if [ -n "$scad_id" ]; then
               echo "  Downloading scad artifact (ID: $scad_id)..."
-              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${scad_id}/zip" \
-                > "/tmp/${proj}.zip" 2>/dev/null
-              unzip -o "/tmp/${proj}.zip" -d "_site/downloads/" 2>/dev/null \
-                || echo "  WARNING: Failed to unzip scad artifact for $proj"
+              if gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${scad_id}/zip" \
+                   > "/tmp/${proj}.zip" 2>/dev/null \
+                 && unzip -o "/tmp/${proj}.zip" -d "_site/downloads/" 2>/dev/null; then
+                got_scad=true
+              fi
               rm -f "/tmp/${proj}.zip"
-            else
-              echo "  WARNING: No scad artifact found for $proj"
             fi
 
-            # Download latest preview image artifact (skip expired)
+            # ── preview image artifact ──
             preview_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=preview-${proj}&per_page=5" \
               --jq '[.artifacts[] | select(.expired == false)][0].id // empty' 2>/dev/null || true)
             if [ -n "$preview_id" ]; then
               echo "  Downloading preview artifact (ID: $preview_id)..."
-              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${preview_id}/zip" \
-                > "/tmp/preview-${proj}.zip" 2>/dev/null
-              unzip -o "/tmp/preview-${proj}.zip" -d "_site/images/" 2>/dev/null \
-                || echo "  WARNING: Failed to unzip preview artifact for $proj"
-              rm -f "/tmp/preview-${proj}.zip"
-              # Also copy preview to downloads
-              if [ -f "_site/images/${proj}.png" ]; then
-                cp "_site/images/${proj}.png" "_site/downloads/"
+              if gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${preview_id}/zip" \
+                   > "/tmp/preview-${proj}.zip" 2>/dev/null \
+                 && unzip -o "/tmp/preview-${proj}.zip" -d "_site/images/" 2>/dev/null; then
+                got_preview=true
               fi
-            else
-              echo "  WARNING: No preview artifact found for $proj"
+              rm -f "/tmp/preview-${proj}.zip"
+            fi
+
+            # ── Fallback: fetch from deployed GitHub Pages site ──
+            if (! $got_scad || ! $got_preview) && [ -n "$PAGES_URL" ]; then
+              echo "  Falling back to deployed site for missing files..."
+              if ! $got_scad; then
+                if curl -fsSL "${PAGES_URL}downloads/${proj}.zip" \
+                     -o "/tmp/fallback-${proj}.zip" 2>/dev/null; then
+                  unzip -o "/tmp/fallback-${proj}.zip" -d "_site/downloads/" 2>/dev/null \
+                    && { got_scad=true; echo "  Recovered scad from deployed site"; }
+                  rm -f "/tmp/fallback-${proj}.zip"
+                fi
+              fi
+              if ! $got_preview; then
+                if curl -fsSL "${PAGES_URL}images/${proj}.png" \
+                     -o "_site/images/${proj}.png" 2>/dev/null; then
+                  got_preview=true
+                  echo "  Recovered preview from deployed site"
+                fi
+              fi
+              # If preview is still missing but was extracted from the deployed zip,
+              # copy it from downloads to images.
+              if ! $got_preview && [ -f "_site/downloads/${proj}.png" ]; then
+                cp "_site/downloads/${proj}.png" "_site/images/"
+                got_preview=true
+                echo "  Recovered preview from deployed zip"
+              fi
+            fi
+
+            $got_scad    || echo "  WARNING: No scad available for $proj"
+            $got_preview || echo "  WARNING: No preview available for $proj"
+
+            # Copy preview to downloads for zip creation
+            if [ -f "_site/images/${proj}.png" ]; then
+              cp "_site/images/${proj}.png" "_site/downloads/"
             fi
           done
 
