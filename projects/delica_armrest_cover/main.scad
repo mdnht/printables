@@ -1,8 +1,8 @@
 // デリカD5 アームレスト穴埋め蓋（ドーム型キャップ・スプライン付き）
 
 /* [キャップの設定] */
-cap_diameter = 70;    // 蓋の直径
-cap_height = 2.5;       // 蓋の中央の厚み（ドームの高さ）
+cap_diameter = 90;    // 蓋の直径
+cap_height = 5;       // 蓋の中央の厚み（ドームの高さ）
 
 /* [軸・穴の設定] */
 hole_diameter = 18.0;   // 穴の最大外径 (18mm)
@@ -16,7 +16,7 @@ groove_inner_dia = 14; // 溝の底の直径
 
 /* [歯車状（スプライン）の設定] */
 spline_count = 17;      
-spline_depth = 2;     
+spline_depth = 2.2;     
 
 $fn = 100;
 
@@ -39,8 +39,10 @@ module delica_armrest_cap() {
         union() {    
             // 歯車状の突起（スプライン）
             for(i = [0 : spline_count - 1]) {
+               
                 rotate([0, 0, i * (321 / spline_count+1)])
                 translate([(hole_diameter) / 2 , 0, 0])
+                 scale([1.2, 1, 1])
                 cylinder(h = plug_length - groove_offset - groove_width, d = spline_depth, $fn=10);
             }
         }
