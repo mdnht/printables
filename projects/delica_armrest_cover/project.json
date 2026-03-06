@@ -1,0 +1,9 @@
+{
+    "name": "delica-armrest-cover",
+    "description": "デリカのアームレストカバー",
+    "version": "0.1.0",
+    "author": "mdnht",
+    "tags": ["デリカD5", "アームレスト", "カバー", "パラメトリック"],
+    "publish": true
+}
+    
