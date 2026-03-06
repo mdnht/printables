@@ -28,11 +28,29 @@ _CARD_TEMPLATE = Template("""\
 $image_html  <h2>$name</h2>
   <p class="desc">$description</p>
   <div class="meta">
-    <span>v$version</span>
+    <span>v$version</span>$badge_html
     <span>by $author</span>
   </div>
   <div class="tags">$tags_html</div>
 $downloads_html</article>""")
+
+
+_DRAFT_BADGE_HTML = '\n    <span class="badge badge-draft">ドラフト</span>'
+
+
+def is_draft_version(version: str) -> bool:
+    """Return True if *version* is at or below the draft threshold (<= 1.0.0)."""
+    try:
+        parts = list(int(x) for x in version.strip().split("."))
+    except ValueError:
+        return False
+    # Reject any negative component (e.g. "-1.0.0" is not a valid version).
+    if any(p < 0 for p in parts):
+        return False
+    # Pad to at least 3 components for a reliable comparison.
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts) <= (1, 0, 0)
 
 
 def load_projects(repo_root: Path) -> list[dict]:
@@ -105,14 +123,19 @@ def render_card(
                 f'</div>\n'
             )
 
+    # Build draft badge when version is 1.0.0 or below.
+    version_str = project.get("version", "0.0.0")
+    badge_html = _DRAFT_BADGE_HTML if is_draft_version(version_str) else ""
+
     return _CARD_TEMPLATE.substitute(
         name=html.escape(project.get("name", "unknown")),
         description=html.escape(project.get("description", "")),
-        version=html.escape(project.get("version", "0.0.0")),
+        version=html.escape(version_str),
         author=html.escape(project.get("author", "unknown")),
         tags_html=tags_html,
         image_html=image_html,
         downloads_html=downloads_html,
+        badge_html=badge_html,
     )
 
 
