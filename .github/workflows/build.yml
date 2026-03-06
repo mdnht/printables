@@ -66,8 +66,19 @@ jobs:
               projects_json='[]'
               any_changed="false"
             fi
+          elif [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            # Push to main: build ALL projects so the catalog deploy
+            # always has a complete set of preview images and downloads.
+            if [ ${#all_projects[@]} -gt 0 ]; then
+              printf -v projects_json '"%s",' "${all_projects[@]:-}"
+              projects_json="[${projects_json%,}]"
+              any_changed="true"
+            else
+              projects_json='[]'
+              any_changed="false"
+            fi
           else
-            # Determine changed files between HEAD and its parent
+            # Pull request / other: only build changed projects.
             changed=$(git diff --name-only HEAD^ HEAD 2>/dev/null || git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null)
 
             # Changes in libs/ or scripts/ → rebuild ALL projects
