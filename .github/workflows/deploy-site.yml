@@ -44,40 +44,57 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p _site/images _site/downloads
-          RUN_ID=$(gh run list \
-            --repo "$GITHUB_REPOSITORY" \
-            --workflow build.yml \
-            --branch main \
-            --status success \
-            --limit 1 \
-            --json databaseId \
-            --jq '.[0].databaseId')
-          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
-            echo "Downloading artifacts from build run $RUN_ID..."
-            gh run download "$RUN_ID" \
-              --repo "$GITHUB_REPOSITORY" \
-              -D _dl || echo "WARNING: Failed to download artifacts"
-            # Copy preview images
-            if [ -d "_dl/preview-images" ]; then
-              cp _dl/preview-images/*.png _site/images/ 2>/dev/null || true
+
+          # Collect all project directory names
+          projects=()
+          for dir in projects/*/; do
+            [ -f "${dir}main.scad" ] && projects+=("$(basename "$dir")")
+          done
+
+          echo "Projects to fetch artifacts for: ${projects[*]}"
+
+          # For each project, download the latest scad and preview artifacts
+          # from any successful build run (not just the most recent one).
+          for proj in "${projects[@]}"; do
+            echo "--- Fetching artifacts for: $proj ---"
+
+            # Download latest bundled scad artifact (skip expired)
+            scad_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${proj}&per_page=5" \
+              --jq '[.artifacts[] | select(.expired == false)][0].id // empty' 2>/dev/null || true)
+            if [ -n "$scad_id" ]; then
+              echo "  Downloading scad artifact (ID: $scad_id)..."
+              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${scad_id}/zip" \
+                > "/tmp/${proj}.zip" 2>/dev/null
+              unzip -o "/tmp/${proj}.zip" -d "_site/downloads/" 2>/dev/null \
+                || echo "  WARNING: Failed to unzip scad artifact for $proj"
+              rm -f "/tmp/${proj}.zip"
+            else
+              echo "  WARNING: No scad artifact found for $proj"
             fi
-            # Copy bundled scad files and preview images to downloads
-            for dir in _dl/*/; do
-              name=$(basename "$dir")
-              # Skip preview-only artifacts
-              case "$name" in preview-*) continue;; esac
-              # Copy scad files
-              find "$dir" -name '*.scad' -exec cp {} _site/downloads/ \;
-              # Copy corresponding preview image for download
-              if [ -f "_site/images/${name}.png" ]; then
-                cp "_site/images/${name}.png" "_site/downloads/"
+
+            # Download latest preview image artifact (skip expired)
+            preview_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=preview-${proj}&per_page=5" \
+              --jq '[.artifacts[] | select(.expired == false)][0].id // empty' 2>/dev/null || true)
+            if [ -n "$preview_id" ]; then
+              echo "  Downloading preview artifact (ID: $preview_id)..."
+              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${preview_id}/zip" \
+                > "/tmp/preview-${proj}.zip" 2>/dev/null
+              unzip -o "/tmp/preview-${proj}.zip" -d "_site/images/" 2>/dev/null \
+                || echo "  WARNING: Failed to unzip preview artifact for $proj"
+              rm -f "/tmp/preview-${proj}.zip"
+              # Also copy preview to downloads
+              if [ -f "_site/images/${proj}.png" ]; then
+                cp "_site/images/${proj}.png" "_site/downloads/"
               fi
-            done
-            echo "Downloads prepared:"
-            ls _site/downloads/ 2>/dev/null || echo "(none)"
-          else
-            echo "WARNING: No successful build run found – building without artifacts"
-          fi
+            else
+              echo "  WARNING: No preview artifact found for $proj"
+            fi
+          done
+
+          echo "Preview images collected:"
+          ls _site/images/ 2>/dev/null || echo "(none)"
+          echo "Downloads prepared:"
+          ls _site/downloads/ 2>/dev/null || echo "(none)"
 
       - name: Build site
         run: python scripts/generate_catalog.py --output-dir _site --repo-root . --images-dir _site/images --downloads-dir _site/downloads
