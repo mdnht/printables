@@ -39,10 +39,13 @@ _DRAFT_BADGE_HTML = '\n    <span class="badge badge-draft">ドラフト</span>'
 
 
 def is_draft_version(version: str) -> bool:
-    """Return True if *version* is 1.0.0 or below (draft / pre-release)."""
+    """Return True if *version* is at or below the draft threshold (<= 1.0.0)."""
     try:
         parts = list(int(x) for x in version.strip().split("."))
     except ValueError:
+        return False
+    # Reject any negative component (e.g. "-1.0.0" is not a valid version).
+    if any(p < 0 for p in parts):
         return False
     # Pad to at least 3 components for a reliable comparison.
     while len(parts) < 3:
