@@ -30,6 +30,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      pages: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -77,7 +78,8 @@ jobs:
               echo "  Downloading scad artifact (ID: $scad_id)..."
               if gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${scad_id}/zip" \
                    > "/tmp/${proj}.zip" 2>/dev/null \
-                 && unzip -o "/tmp/${proj}.zip" -d "_site/downloads/" 2>/dev/null; then
+                 && unzip -oj "/tmp/${proj}.zip" "*${proj}.scad" -d "_site/downloads/" 2>/dev/null \
+                 && [ -f "_site/downloads/${proj}.scad" ]; then
                 got_scad=true
               fi
               rm -f "/tmp/${proj}.zip"
@@ -90,7 +92,8 @@ jobs:
               echo "  Downloading preview artifact (ID: $preview_id)..."
               if gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${preview_id}/zip" \
                    > "/tmp/preview-${proj}.zip" 2>/dev/null \
-                 && unzip -o "/tmp/preview-${proj}.zip" -d "_site/images/" 2>/dev/null; then
+                 && unzip -oj "/tmp/preview-${proj}.zip" "*${proj}.png" -d "_site/images/" 2>/dev/null \
+                 && [ -f "_site/images/${proj}.png" ]; then
                 got_preview=true
               fi
               rm -f "/tmp/preview-${proj}.zip"
