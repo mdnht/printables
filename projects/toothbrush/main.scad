@@ -1,28 +1,39 @@
-// 電動歯ブラシ ブラシホルダー (3本用)
+// 電動歯ブラシ ブラシホルダー
 // 首の太さ: 約8mm想定
 
-$fn = 60; // 円の滑らかさ
+/* [基本設定] */
+// ブラシの本数
+num_slots = 3;          // [1:1:10]
+// 歯間ブラシ/糸ようじ用の穴の数 (0 ～ ブラシの本数+1 まで)
+num_floss_holes = 2;    // [0:1:11]
+
+// 歯ブラシ用の穴の直径 (mm)
+neck_dia = 7.0;         // [5.0:0.1:15.0]
+// 糸ようじ/歯間ブラシ用の穴の直径 (mm)
+floss_hole_dia = 5.0;   // [3.0:0.1:10.0]
+
+/* [磁石の設定] */
+// マグネットシートの厚み (mm)
+magnet_thickness = 1.0; // [0.0:0.1:3.0]
+
+/* [Hidden] */
+// 出し入れするスリットの幅は穴径より少しだけ狭くして引っかかりをもたせる
+slot_width = neck_dia - 0.5;
+
+// ブラシ間のスペース (mm)
+slot_spacing = 30;
+
+// 円の滑らかさ
+$fn = 60;
 
 // --- パラメータ ---
-neck_dia = 9.0;         // 首かけ部分の穴の直径 (8mmの首に対して少し余裕を持たせる)
-slot_width = 8.5;       // 出し入れするスリットの幅 (少し引っかかりつつ入る絶妙な幅)
-num_slots = 3;          // ブラシの本数
-slot_spacing = 30;      // ブラシ間のスペース (mm)
-
-floss_hole_dia = 5.0;   // 両端に開ける糸ようじ用の穴の直径
-
-brush_insert_od = 15.0; // 歯ブラシ用インサートの外径
-floss_insert_od = 11.0; // 糸ようじ用インサートの外径 (穴5.0mm + 縁の幅3.0mm*2)
-insert_clearance = 0.2; // リングをはめ込むためのクリアランス
-
-holder_thickness = 5.0; // ブラシを支える水平部分（ホルダー部）の厚み
+holder_thickness = 3.0; // ブラシを支える水平部分（ホルダー部）の厚み
 holder_depth = 25.0;    // 前へ突き出す奥行き (mm)
 body_length = (num_slots + 1) * slot_spacing; // 全体の横幅 (120mm)
 
-back_thickness = 4.0;   // 背面板全体の厚み（マグネットのザグリ分も含むため少し厚く）
+back_thickness = 3.0;   // 背面板全体の厚み（マグネットのザグリ分も含むため少し厚く）
 back_height = 30.0;     // マグネットを貼る背面板の高さ (接着面積を稼ぐため大きめに設定)
-magnet_thickness = 1.0; // マグネットシートの厚み (ザグリの深さ。お使いのシートに合わせて変更してください)
-magnet_margin = 2.0;    // ザグリ周囲のフチの太さ
+magnet_margin = 5.0;    // ザグリ周囲のフチの太さ
 
 fillet_r = 5.0;         // 全体の角を丸める半径
 
@@ -100,13 +111,13 @@ module toothbrush_holder() {
         for (i = [0 : num_slots - 1]) {
             x_pos = -body_length / 2 + slot_spacing + (i * slot_spacing);
             
-            // 丸穴: インサートリングをはめこむための大きな穴をくり抜く
-            translate([x_pos, back_thickness + holder_depth * 0.4, -1])
-                cylinder(h = holder_thickness + 2, d = brush_insert_od + insert_clearance * 2);
+            // 丸穴: 首かけ用の面取り穴
+            translate([x_pos, back_thickness + holder_depth * 0.4, 0])
+                chamfered_hole(dia = neck_dia, h = holder_thickness, chamfer = 1.0);
             
-            // スリット: 丸穴から前方（手前側）に真っ直ぐ抜ける開口部 (インサートのスリットより少しだけ広くする)
+            // スリット: 丸穴から前方（手前側）に真っ直ぐ抜ける開口部
             translate([x_pos, back_thickness + holder_depth * 0.4 + holder_depth / 2, holder_thickness / 2])
-                cube([slot_width + insert_clearance * 2, holder_depth, holder_thickness + 2], center = true);
+                cube([slot_width, holder_depth, holder_thickness + 2], center = true);
                 
             // スリット入り口の面取り (Z方向両端も軽く面取りする場合はスリット側のみ少し面倒ですが、ここは角Rのみにする)
             // (既存のスリット入り口のR5は維持)
@@ -122,63 +133,27 @@ module toothbrush_holder() {
                 }
         }
         
-        // 5. 両端の空きスペースに糸ようじ用の穴を配置
-        // 糸ようじ用も色分けインサートにするため、大きめの穴をくり抜く
-        for (x_pos = [-body_length / 2 + 10, body_length / 2 - 10]) {
-            translate([x_pos, back_thickness + holder_depth * 0.4, -1])
-                cylinder(h = holder_thickness + 2, d = floss_insert_od + insert_clearance * 2);
+        // 5. 空きスペース（両端およびホルダー間）に糸ようじ・歯間ブラシ用の穴を配置
+        // 穴は最大 (num_slots + 1) 個まで配置可能
+        if (num_floss_holes > 0) {
+            actual_holes = min(num_floss_holes, num_slots + 1);
+            for (k = [0 : actual_holes - 1]) {
+                // 1個目は左端（プレート端と、左端の歯ブラシ穴の端の中間）
+                // 2個目は右端（プレート端と、右端の歯ブラシ穴の端の中間）
+                // 3個目以降はホルダー間（歯ブラシ穴と歯ブラシ穴のちょうど中間）
+                x_pos = (k == 0) ? -body_length / 2 + slot_spacing / 2 - neck_dia / 4 :
+                        (k == 1) ?  body_length / 2 - slot_spacing / 2 + neck_dia / 4 :
+                        -body_length / 2 + slot_spacing * 1.5 + (k - 2) * slot_spacing;
+                
+                // ブラシの柄と干渉しないよう、少し手前（Y方向）に配置する
+                translate([x_pos, back_thickness + holder_depth * 0.65, 0])
+                    chamfered_hole(dia = floss_hole_dia, h = holder_thickness, chamfer = 1.0);
+            }
         }
     }
 }
 
-// 色分け用のインサートリング（歯ブラシ用）
-module brush_color_insert() {
-    difference() {
-        // 外形
-        cylinder(h = holder_thickness, d = brush_insert_od);
-        
-        // 首かけ用の面取り穴
-        chamfered_hole(dia = neck_dia, h = holder_thickness, chamfer = 1.0);
-        
-        // 前方のスリット
-        translate([0, holder_depth / 2, holder_thickness / 2])
-            cube([slot_width, holder_depth, holder_thickness + 2], center = true);
-    }
-}
-
-// 色分け用のインサートリング（糸ようじ用）
-module floss_color_insert() {
-    difference() {
-        // 外形
-        cylinder(h = holder_thickness, d = floss_insert_od);
-        
-        // 糸ようじ用の面取り穴
-        chamfered_hole(dia = floss_hole_dia, h = holder_thickness, chamfer = 1.0);
-    }
-}
-
-// 部品のレイアウト配置
-module assembly() {
-    // 本体
-    color("WhiteSmoke") toothbrush_holder();
-    
-    // 歯ブラシ用インサートリングを所定の位置にはめ込んだ状態に配置
-    for (i = [0 : num_slots - 1]) {
-        x_pos = -body_length / 2 + slot_spacing + (i * slot_spacing);
-        // 視覚的に区別しやすいよう色を分けて配置
-        c = (i == 0) ? "Tomato" : ((i == 1) ? "MediumSeaGreen" : "DodgerBlue");
-        color(c) translate([x_pos, back_thickness + holder_depth * 0.4, 0])
-            brush_color_insert();
-    }
-    
-    // 糸ようじ用インサートリングを所定の位置にはめ込んだ状態に配置
-    color("Gold") translate([-body_length / 2 + 10, back_thickness + holder_depth * 0.4, 0])
-        floss_color_insert();
-    color("Orange") translate([body_length / 2 - 10, back_thickness + holder_depth * 0.4, 0])
-        floss_color_insert();
-}
-
 // 描画実行
-// 本体の所定の位置にインサートをはめ込んだ状態で出力（プレビュー用）
-// ※実際に3Dプリントする際は、本体とインサートを分けて出力してください。
-assembly();
+// 本体の描画（一体化済み）
+color("WhiteSmoke") toothbrush_holder();
+
