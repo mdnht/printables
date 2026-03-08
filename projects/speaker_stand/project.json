@@ -1,0 +1,8 @@
+{
+    "name": "speaker-stand",
+    "description": "スピーカースタンド",
+    "version": "0.0.0",
+    "author": "mdnht",
+    "tags": ["スピーカー", "スタンド", "Sundcore Motion B", "Anker"],
+    "publish": true
+}
