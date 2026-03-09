@@ -23,10 +23,15 @@ joint_height = 3.0;  // ギア部分の高さ（3mm）
 joint_base_h = 3.0;  // ジョイント根本のギアなし円柱部分の高さ (元の5.0mmから3.0mmに短縮して高さを抑える)
 clearance = 0.2; // 調整用クリアランス
 
-// プリント用ネジ固定設定 (M10相当)
+// プリント用ネジ固定設定 (M10相当・カスタムピッチ2.0mm)
 screw_d = 10.0;           // ネジの呼び径
 screw_pitch = 2.0;        // ネジのピッチ
-screw_shaft_h = 11.0;     // ネジの軸長 (座グリ底からマウント天井までピッタリ11mmとし、締め込むと内部のバーに接触して固定力を生む長さ)
+screw_shaft_h = 11.0;     // ネジの軸長
+                           //   ・座グリ底からマウント天井までの距離を 11mm とみなして設計している
+                           //   ・下部ネジ穴の深さ screw_pilot_depth(=12.0mm) に対して 1mm 余裕を持たせるため、
+                           //     ネジ軸がパイロット穴の底に強く当たりすぎない長さ (screw_shaft_h = screw_pilot_depth - 1) としている
+                           //   ・center_h など Z 方向の寸法を変更する場合は、「座グリ底〜マウント天井 ≒ 11mm」
+                           //     という前提が崩れないように、必要に応じて screw_shaft_h および screw_pilot_depth を再検討すること
 screw_head_d = 16.0;      // ネジ頭の直径
 screw_head_h = 4.0;       // ネジ頭の厚み
 screw_head_sink = 4.0;    // スピーカーベース上面からの座グリ深さ (ネジ頭を完全に埋めるため頭の厚みと同じ4.0mmに設定)
@@ -71,7 +76,7 @@ module joint_shape(r, h, clr=0) {
 }
 
 // スピーカーベースプレート（上部）
-module speaker_base_plate() {
+    center_h = joint_height + joint_base_h + screw_head_sink + wall_thick; // ジョイント高さ + 座グリ深さ + 底面の壁厚(2.0mm) を確保する
     center_r = joint_radius + 4.0; // 中央の円柱の半径
     corner_r = 8.0; // 四隅の円柱の半径（スピーカーをしっかりホールドできるよう少し太く戻す）
     
@@ -168,7 +173,7 @@ module desk_mount() {
                 // 開口部を本来の奥行きより狭くして、側面の弾性で挟み込んで固定（両側に約2mmずつのツメを残す）
                 translate([0, 0, -0.1]) {
                     cuboid([mount_length+1, desk_bar_depth - 4.0, mount_thick + 0.2], anchor=BOTTOM);
-                }
+                // 根本のギアなしの円柱部分 (3mm)
             }
             
             // 回転ジョイント（オス）
