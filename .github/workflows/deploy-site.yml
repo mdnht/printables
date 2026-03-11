@@ -35,16 +35,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ./site
+        run: npm install
 
       - name: Download build artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p _site/images _site/downloads
+          mkdir -p site/public/images site/public/downloads
 
           # Get the current GitHub Pages URL for fallback when artifacts expire.
           PAGES_URL=$(gh api "repos/${GITHUB_REPOSITORY}/pages" \
@@ -78,8 +82,8 @@ jobs:
               echo "  Downloading scad artifact (ID: $scad_id)..."
               if gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${scad_id}/zip" \
                    > "/tmp/${proj}.zip" 2>/dev/null \
-                 && unzip -oj "/tmp/${proj}.zip" "*${proj}.scad" -d "_site/downloads/" 2>/dev/null \
-                 && [ -f "_site/downloads/${proj}.scad" ]; then
+                 && unzip -oj "/tmp/${proj}.zip" "*${proj}.scad" -d "site/public/downloads/" 2>/dev/null \
+                 && [ -f "site/public/downloads/${proj}.scad" ]; then
                 got_scad=true
               fi
               rm -f "/tmp/${proj}.zip"
@@ -92,8 +96,8 @@ jobs:
               echo "  Downloading preview artifact (ID: $preview_id)..."
               if gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${preview_id}/zip" \
                    > "/tmp/preview-${proj}.zip" 2>/dev/null \
-                 && unzip -oj "/tmp/preview-${proj}.zip" "*${proj}.png" -d "_site/images/" 2>/dev/null \
-                 && [ -f "_site/images/${proj}.png" ]; then
+                 && unzip -oj "/tmp/preview-${proj}.zip" "*${proj}.png" -d "site/public/images/" 2>/dev/null \
+                 && [ -f "site/public/images/${proj}.png" ]; then
                 got_preview=true
               fi
               rm -f "/tmp/preview-${proj}.zip"
@@ -105,22 +109,22 @@ jobs:
               if ! $got_scad; then
                 if curl -fsSL "${PAGES_URL}downloads/${proj}.zip" \
                      -o "/tmp/fallback-${proj}.zip" 2>/dev/null; then
-                  unzip -o "/tmp/fallback-${proj}.zip" -d "_site/downloads/" 2>/dev/null \
+                  unzip -o "/tmp/fallback-${proj}.zip" -d "site/public/downloads/" 2>/dev/null \
                     && { got_scad=true; echo "  Recovered scad from deployed site"; }
                   rm -f "/tmp/fallback-${proj}.zip"
                 fi
               fi
               if ! $got_preview; then
                 if curl -fsSL "${PAGES_URL}images/${proj}.png" \
-                     -o "_site/images/${proj}.png" 2>/dev/null; then
+                     -o "site/public/images/${proj}.png" 2>/dev/null; then
                   got_preview=true
                   echo "  Recovered preview from deployed site"
                 fi
               fi
               # If preview is still missing but was extracted from the deployed zip,
               # copy it from downloads to images.
-              if ! $got_preview && [ -f "_site/downloads/${proj}.png" ]; then
-                cp "_site/downloads/${proj}.png" "_site/images/"
+              if ! $got_preview && [ -f "site/public/downloads/${proj}.png" ]; then
+                cp "site/public/downloads/${proj}.png" "site/public/images/"
                 got_preview=true
                 echo "  Recovered preview from deployed zip"
               fi
@@ -130,23 +134,31 @@ jobs:
             $got_preview || echo "  WARNING: No preview available for $proj"
 
             # Copy preview to downloads for zip creation
-            if [ -f "_site/images/${proj}.png" ]; then
-              cp "_site/images/${proj}.png" "_site/downloads/"
+            if [ -f "site/public/images/${proj}.png" ]; then
+              cp "site/public/images/${proj}.png" "site/public/downloads/"
             fi
+
+            # Create zip package for project containing scad and png files
+            cd site/public/downloads
+            if ls *${proj}.* 1> /dev/null 2>&1; then
+              zip -q ${proj}.zip *${proj}.* || true
+            fi
+            cd ../../..
           done
 
           echo "Preview images collected:"
-          ls _site/images/ 2>/dev/null || echo "(none)"
+          ls site/public/images/ 2>/dev/null || echo "(none)"
           echo "Downloads prepared:"
-          ls _site/downloads/ 2>/dev/null || echo "(none)"
+          ls site/public/downloads/ 2>/dev/null || echo "(none)"
 
       - name: Build site
-        run: python scripts/generate_catalog.py --output-dir _site --repo-root . --images-dir _site/images --downloads-dir _site/downloads
+        working-directory: ./site
+        run: npm run generate
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: site/.output/public
 
   deploy:
     name: Deploy to GitHub Pages
