@@ -22,13 +22,9 @@ printables/
 │       └── main.scad              # メイン OpenSCAD ソースファイル
 ├── scripts/
 │   ├── build.sh                   # ローカルビルド用ヘルパースクリプト
-│   ├── bundle.py                  # バンドラー：use/include を展開して単一 .scad に統合
-│   └── generate_catalog.py        # カタログサイト生成スクリプト
-├── site/
-│   ├── index.html                 # カタログサイトの HTML テンプレート
-│   └── style.css                  # カタログサイトのスタイルシート
+│   └── bundle.py                  # バンドラー：use/include を展開して単一 .scad に統合
+├── site/                          # Nuxt ベースのカタログサイト
 ├── dist/                          # ビルド出力（git 管理対象外）
-├── _site/                         # カタログサイト出力（git 管理対象外）
 └── .gitignore
 ```
 
@@ -131,16 +127,16 @@ MakerWorld・Printables・Thingiverse などのサイトへ直接アップロー
 
 | ステップ | 内容 |
 |---|---|
-| **build** | ビルドアーティファクトをダウンロードし、`site/` のテンプレートとプロジェクトメタデータから `_site/index.html` を生成します。各プロジェクトカードにはダウンロードボタン（zip アーカイブ）が含まれます。 |
+| **build** | ビルドアーティファクトをダウンロードし、Nuxt を利用して静的サイト（`site/.output/public`）を生成します。各プロジェクトカードにはプレビュー画像とダウンロードボタン（zip アーカイブ）が含まれます。 |
 | **deploy** | 生成されたサイトを GitHub Pages にデプロイします。 |
 
 #### ローカルプレビュー
 
 ```bash
-python scripts/generate_catalog.py --output-dir _site --repo-root .
-# ダウンロードボタン付きで生成する場合（事前にビルドアーティファクトを配置）:
-# python scripts/generate_catalog.py --output-dir _site --repo-root . --images-dir _site/images --downloads-dir _site/downloads
-# 生成された _site/index.html をブラウザで開いてください
+cd site
+npm install
+npm run dev
+# localhost:3000 でカタログサイトをプレビューできます
 ```
 
 > **初回セットアップ**: GitHub Pages を有効にするには **Settings → Pages → Source → GitHub Actions** を選択してください。
