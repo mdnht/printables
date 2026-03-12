@@ -24,6 +24,14 @@ export default defineEventHandler(async (event) => {
           if (data.publish) {
             data._slug = entry.name
 
+            // Add last modified date
+            try {
+              const stat = await fs.stat(projectJsonPath)
+              data.updatedAt = stat.mtime.toISOString()
+            } catch (e) {
+              data.updatedAt = new Date(0).toISOString()
+            }
+
             // Check if the download artifact exists during generation
             let hasDownload = false
             try {
@@ -44,11 +52,11 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // Sort projects by name
+    // Sort projects by updatedAt (descending by default)
     projects.sort((a, b) => {
-      const nameA = a.name || ''
-      const nameB = b.name || ''
-      return nameA.localeCompare(nameB)
+      const dateA = new Date(a.updatedAt || 0)
+      const dateB = new Date(b.updatedAt || 0)
+      return dateB.getTime() - dateA.getTime()
     })
 
     return projects
