@@ -7,7 +7,7 @@
       <p>公開されているプロジェクトはありません。</p>
     </div>
     <div v-else class="grid">
-      <article v-for="project in projects" :key="project._slug" class="card" @click="goToProject(project._slug)">
+      <NuxtLink v-for="project in projects" :key="project._slug" class="card" :to="`/projects/${project._slug}`">
         <img
           class="card-preview"
           :src="`${useRuntimeConfig().app.baseURL}images/${project._slug}.png`"
@@ -38,16 +38,14 @@
             </svg> Download
           </a>
         </div>
-      </article>
+      </NuxtLink>
     </div>
   </div>
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
 
-const router = useRouter()
-const { data: projects, pending } = await useFetch('/api/projects')
+const { data: projects, pending } = await useFetch('/api/project-list')
 
 function handleImageError(event) {
   event.target.style.display = 'none';
@@ -65,9 +63,7 @@ function isDraftVersion(version) {
   }
 }
 
-function goToProject(slug) {
-  router.push(`/projects/${slug}`)
-}
+
 </script>
 
 <style scoped>
@@ -84,6 +80,8 @@ function goToProject(slug) {
 }
 
 .card {
+  text-decoration: none;
+  color: inherit;
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
