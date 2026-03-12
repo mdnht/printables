@@ -1,5 +1,14 @@
 <template>
   <div>
+    <div class="controls" v-if="projects && projects.length > 0">
+      <label for="sort-select">並べ替え:</label>
+      <select id="sort-select" v-model="sortOption" class="sort-select">
+        <option value="updatedAtDesc">更新日 (新しい順)</option>
+        <option value="updatedAtAsc">更新日 (古い順)</option>
+        <option value="nameAsc">プロジェクト名 (A-Z)</option>
+        <option value="nameDesc">プロジェクト名 (Z-A)</option>
+      </select>
+    </div>
     <div v-if="pending" class="empty">
       Loading...
     </div>
@@ -7,7 +16,7 @@
       <p>公開されているプロジェクトはありません。</p>
     </div>
     <div v-else class="grid">
-      <NuxtLink v-for="project in projects" :key="project._slug" class="card" :to="`/projects/${project._slug}`">
+      <NuxtLink v-for="project in sortedProjects" :key="project._slug" class="card" :to="`/projects/${project._slug}`">
         <img
           class="card-preview"
           :src="`${useRuntimeConfig().app.baseURL}images/${project._slug}.png`"
@@ -20,6 +29,15 @@
         <p class="desc">{{ project.description }}</p>
 
         <div class="meta">
+          <span v-if="project.updatedAt" class="date" :title="formatDate(project.updatedAt)">
+            <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            {{ formatDate(project.updatedAt) }}
+          </span>
           <span>v{{ project.version || '0.0.0' }}</span>
           <span v-if="isDraftVersion(project.version)" class="badge badge-draft">ドラフト</span>
           <span>by {{ project.author || 'unknown' }}</span>
@@ -44,8 +62,45 @@
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
 
 const { data: projects, pending } = await useFetch('/api/project-list')
+
+const sortOption = ref('updatedAtDesc')
+
+const sortedProjects = computed(() => {
+  if (!projects.value) return []
+
+  // Create a shallow copy to sort
+  const list = [...projects.value]
+
+  return list.sort((a, b) => {
+    if (sortOption.value === 'updatedAtDesc') {
+      const dateA = new Date(a.updatedAt || 0)
+      const dateB = new Date(b.updatedAt || 0)
+      return dateB.getTime() - dateA.getTime()
+    } else if (sortOption.value === 'updatedAtAsc') {
+      const dateA = new Date(a.updatedAt || 0)
+      const dateB = new Date(b.updatedAt || 0)
+      return dateA.getTime() - dateB.getTime()
+    } else if (sortOption.value === 'nameAsc') {
+      const nameA = a.name || ''
+      const nameB = b.name || ''
+      return nameA.localeCompare(nameB)
+    } else if (sortOption.value === 'nameDesc') {
+      const nameA = a.name || ''
+      const nameB = b.name || ''
+      return nameB.localeCompare(nameA)
+    }
+    return 0
+  })
+})
+
+function formatDate(isoString) {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  return date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' })
+}
 
 function handleImageError(event) {
   event.target.style.display = 'none';
@@ -182,4 +237,51 @@ function isDraftVersion(version) {
   width: 1em;
   height: 1em;
 }
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 1.5rem;
+  gap: 0.5rem;
+}
+
+.controls label {
+  font-size: 0.9rem;
+  color: #555;
+  font-weight: 500;
+}
+
+.sort-select {
+  padding: 0.5rem 2rem 0.5rem 1rem;
+  font-size: 0.95rem;
+  color: #333;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 1em;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: #3949ab;
+  box-shadow: 0 0 0 3px rgba(57, 73, 171, 0.2);
+}
+
+.icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  margin-right: 0.2em;
+}
+
+.date {
+  color: #777;
+}
+
 </style>
