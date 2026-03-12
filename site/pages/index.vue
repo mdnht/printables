@@ -7,7 +7,7 @@
       <p>公開されているプロジェクトはありません。</p>
     </div>
     <div v-else class="grid">
-      <NuxtLink v-for="project in projects" :key="project._slug" class="card" :to="`/projects/${project._slug}`">
+      <div v-for="project in projects" :key="project._slug" class="card">
         <img
           class="card-preview"
           :src="`${useRuntimeConfig().app.baseURL}images/${project._slug}.png`"
@@ -16,7 +16,11 @@
           @error="handleImageError"
         >
 
-        <h2>{{ project.name }}</h2>
+        <h2>
+          <NuxtLink :to="`/projects/${project._slug}`" class="card-link">
+            {{ project.name }}
+          </NuxtLink>
+        </h2>
         <p class="desc">{{ project.description }}</p>
 
         <div class="meta">
@@ -29,7 +33,7 @@
           <span v-for="tag in project.tags" :key="tag" class="tag">{{ tag }}</span>
         </div>
 
-        <div class="downloads" v-if="project.hasDownload" @click.stop>
+        <div class="downloads" v-if="project.hasDownload">
           <a class="dl-btn" :href="`${useRuntimeConfig().app.baseURL}downloads/${project._slug}.zip`" download>
             <svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -38,7 +42,7 @@
             </svg> Download
           </a>
         </div>
-      </NuxtLink>
+      </div>
     </div>
   </div>
 </template>
@@ -80,6 +84,7 @@ function isDraftVersion(version) {
 }
 
 .card {
+  position: relative;
   text-decoration: none;
   color: inherit;
   background: #fff;
@@ -90,6 +95,18 @@ function isDraftVersion(version) {
   flex-direction: column;
   transition: box-shadow 0.2s, transform 0.2s;
   cursor: pointer;
+}
+
+.card-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 .card:hover {
@@ -159,6 +176,8 @@ function isDraftVersion(version) {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.75rem;
+  position: relative;
+  z-index: 2;
 }
 
 .dl-btn {
