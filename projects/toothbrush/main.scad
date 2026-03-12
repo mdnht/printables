@@ -26,6 +26,9 @@ slot_width = neck_dia - 0.5;
 // Space between brushes (mm)
 slot_spacing = 30;
 
+// Upward tilt angle (degrees) to prevent sliding
+tilt_angle = 5;       // [0.0:0.1:15.0]
+
 // Smoothness of circles
 $fn = 60;
 
@@ -71,10 +74,19 @@ module backplate_shape(size, r, center = false) {
 }
 
 // Fillet to smoothly connect the inner joint of the L-shape
-module L_fillet(length, r) {
-    difference() {
-        translate([0, r/2, -r/2]) cube([length, r, r], center=true);
-        translate([0, r, -r]) rotate([0, 90, 0]) cylinder(h=length+0.1, r=r, center=true);
+module L_fillet(length, r, tilt=0) {
+    // If tilt is 90, simple fillet is not needed or cos(90) becomes 0 causing NaN
+    if (tilt < 89.9) {
+        h = r * (1 - sin(tilt)) / cos(tilt);
+        y2 = r - r * sin(tilt);
+        z2 = -h + r * cos(tilt);
+        
+        rotate([0, 90, 0]) rotate([0, 0, 90])
+            linear_extrude(height=length, center=true)
+                difference() {
+                    polygon([[0, 0], [0, -h], [r, -h], [y2, z2]]);
+                    translate([r, -h]) circle(r=r, $fn=$fn);
+                }
     }
 }
 
@@ -92,9 +104,11 @@ module toothbrush_holder() {
     difference() {
         // L-shaped base combining the backplate attached to the wall and the protruding holder
         union() {
-            // 1. Horizontal holder part with slots
-            translate([0, back_thickness + holder_depth / 2, holder_thickness / 2])
-                holder_shape([body_length, holder_depth, holder_thickness], r=fillet_r, center = true);
+            // 1. Horizontal holder part with slots (Tilted by tilt_angle degrees to prevent sliding)
+            translate([0, back_thickness, 0])
+                rotate([tilt_angle, 0, 0])
+                translate([0, holder_depth / 2, holder_thickness / 2])
+                    holder_shape([body_length, holder_depth, holder_thickness], r=fillet_r, center = true);
             
             // 2. Vertical backplate for attaching the magnet
             translate([0, back_thickness / 2, holder_thickness - back_height / 2])
@@ -102,7 +116,7 @@ module toothbrush_holder() {
                 
             // 3. Fillet connecting the inner joint smoothly
             translate([0, back_thickness, 0])
-                L_fillet(body_length, fillet_r);
+                L_fillet(body_length, fillet_r, tilt_angle);
         }
         
         // 4. Recess on the back for embedding the magnet sheet or tape
@@ -135,25 +149,27 @@ module toothbrush_holder() {
         for (i = [0 : num_slots - 1]) {
             x_pos = -body_length / 2 + slot_spacing + (i * slot_spacing);
             
-            // Round hole: Chamfered hole for the neck
-            translate([x_pos, back_thickness + holder_depth * 0.4, 0])
-                chamfered_hole(dia = neck_dia, h = holder_thickness, chamfer = 1.0);
-            
-            // Slot: Opening straight forward from the round hole
-            translate([x_pos, back_thickness + holder_depth * 0.4 + holder_depth / 2, holder_thickness / 2])
-                cube([slot_width, holder_depth, holder_thickness + 2], center = true);
+            translate([0, back_thickness, 0]) rotate([tilt_angle, 0, 0]) translate([0, -back_thickness, 0]) {
+                // Round hole: Chamfered hole for the neck
+                translate([x_pos, back_thickness + holder_depth * 0.4, 0])
+                    chamfered_hole(dia = neck_dia, h = holder_thickness, chamfer = 1.0);
                 
-            // Chamfer at the slot entrance
-            translate([x_pos - slot_width / 2 - fillet_r, back_thickness + holder_depth - fillet_r, -1])
-                difference() {
-                    cube([fillet_r + 0.1, fillet_r + 0.1, holder_thickness + 2]);
-                    translate([0, 0, -1]) cylinder(h = holder_thickness + 4, r = fillet_r);
-                }
-            translate([x_pos + slot_width / 2 - 0.1, back_thickness + holder_depth - fillet_r, -1])
-                difference() {
-                    cube([fillet_r + 0.1, fillet_r + 0.1, holder_thickness + 2]);
-                    translate([fillet_r + 0.1, 0, -1]) cylinder(h = holder_thickness + 4, r = fillet_r);
-                }
+                // Slot: Opening straight forward from the round hole
+                translate([x_pos, back_thickness + holder_depth * 0.4 + holder_depth / 2, holder_thickness / 2])
+                    cube([slot_width, holder_depth, holder_thickness + 2], center = true);
+                    
+                // Chamfer at the slot entrance
+                translate([x_pos - slot_width / 2 - fillet_r, back_thickness + holder_depth - fillet_r, -1])
+                    difference() {
+                        cube([fillet_r + 0.1, fillet_r + 0.1, holder_thickness + 2]);
+                        translate([0, 0, -1]) cylinder(h = holder_thickness + 4, r = fillet_r);
+                    }
+                translate([x_pos + slot_width / 2 - 0.1, back_thickness + holder_depth - fillet_r, -1])
+                    difference() {
+                        cube([fillet_r + 0.1, fillet_r + 0.1, holder_thickness + 2]);
+                        translate([fillet_r + 0.1, 0, -1]) cylinder(h = holder_thickness + 4, r = fillet_r);
+                    }
+            }
         }
         
         // 5. Place holes for floss / interdental brushes in empty spaces (both ends and between holders)
@@ -169,10 +185,19 @@ module toothbrush_holder() {
                         -body_length / 2 + slot_spacing * 1.5 + (k - 2) * slot_spacing;
                 
                 // Position slightly forward (Y direction) to avoid interference with brush handles
-                translate([x_pos, back_thickness + holder_depth * 0.65, 0])
-                    chamfered_hole(dia = floss_hole_dia, h = holder_thickness, chamfer = 1.0);
+                translate([0, back_thickness, 0]) rotate([tilt_angle, 0, 0]) translate([0, -back_thickness, 0]) {
+                    translate([x_pos, back_thickness + holder_depth * 0.65, 0])
+                        chamfered_hole(dia = floss_hole_dia, h = holder_thickness, chamfer = 1.0);
+                }
             }
         }
+        
+        // 6. Cut the top of the backplate to match the tilt angle of the holder plate
+        // Provide enough dimensions so it won't leave remainders even at 90 degrees tilt
+        translate([0, back_thickness, 0])
+            rotate([tilt_angle, 0, 0])
+            translate([0, 0, holder_thickness + 50])
+                cube([body_length + 2, 100, 100], center = true);
     }
 }
 
