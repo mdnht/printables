@@ -1,0 +1,11 @@
+--- site/pages/index.vue
++++ site/pages/index.vue
+@@ -114,8 +114,7 @@
+   try {
+     const parts = version.trim().split('.').map(Number);
+     if (parts.some(p => isNaN(p) || p < 0)) return false;
+-    while (parts.length < 3) parts.push(0);
+     return parts[0] < 1;
+   } catch (e) {
+     return false;
+   }
