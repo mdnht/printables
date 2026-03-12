@@ -115,8 +115,7 @@ function isDraftVersion(version) {
   try {
     const parts = version.trim().split('.').map(Number);
     if (parts.some(p => isNaN(p) || p < 0)) return false;
-    while (parts.length < 3) parts.push(0);
-    return parts[0] < 1 || (parts[0] === 1 && parts[1] === 0 && parts[2] === 0);
+    return parts[0] < 1;
   } catch (e) {
     return false;
   }
