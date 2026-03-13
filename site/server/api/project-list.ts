@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 
-export default defineEventHandler(async (event) => {
+const handler = async (event) => {
   // Define path to the projects directory.
   // When running with `nuxt generate`, the root might differ, so we use process.cwd() as the base.
   // Depending on where `npm run generate` is run, process.cwd() could be `site` or project root.
@@ -64,4 +64,8 @@ export default defineEventHandler(async (event) => {
     console.error('Error reading projects directory:', err)
     return []
   }
-})
+}
+
+export default typeof defineEventHandler !== 'undefined'
+  ? defineEventHandler(handler)
+  : handler
