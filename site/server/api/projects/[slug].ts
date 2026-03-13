@@ -1,12 +1,19 @@
 import { promises as fs } from 'fs'
 import path from 'path'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import util from 'util'
 
-const execPromise = util.promisify(exec)
+const execFilePromise = util.promisify(execFile)
 
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
+
+  // Validate slug to prevent command injection and path traversal
+  if (!slug || !/^[a-zA-Z0-9_-]+$/.test(slug)) {
+    console.warn(`Invalid slug received: ${slug}`)
+    return null
+  }
+
   const projectsDir = path.resolve(process.cwd(), '../projects')
   const projectDir = path.join(projectsDir, slug)
 
@@ -40,7 +47,7 @@ export default defineEventHandler(async (event) => {
           try {
             const bundleScript = path.resolve(process.cwd(), '../scripts/bundle.py')
             const mainScad = path.join(projectDir, 'main.scad')
-            const { stdout } = await execPromise(`python3 ${bundleScript} ${mainScad}`)
+            const { stdout } = await execFilePromise('python3', [bundleScript, mainScad])
             bundledCode = stdout
           } catch (execErr) {
             console.warn(`Failed to dynamically bundle ${slug}:`, execErr.message)
