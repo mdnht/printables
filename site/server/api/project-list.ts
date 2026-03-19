@@ -24,6 +24,9 @@ export default defineEventHandler(async (event) => {
           if (data.publish) {
             data._slug = entry.name
 
+            // Set project_type, defaulting to 'model'
+            data.project_type = data.project_type || 'model'
+
             // Add last modified date
             try {
               const stat = await fs.stat(projectJsonPath)

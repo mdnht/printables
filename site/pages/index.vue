@@ -1,6 +1,12 @@
 <template>
   <div>
     <div class="controls" v-if="projects && projects.length > 0">
+      <label for="type-select">タイプ:</label>
+      <select id="type-select" v-model="filterType" class="sort-select">
+        <option v-for="typeOption in projectTypes" :key="typeOption.value" :value="typeOption.value">
+          {{ typeOption.label }}
+        </option>
+      </select>
       <label for="sort-select">並べ替え:</label>
       <select id="sort-select" v-model="sortOption" class="sort-select">
         <option value="updatedAtDesc">更新日 (新しい順)</option>
@@ -12,8 +18,8 @@
     <div v-if="pending" class="empty">
       Loading...
     </div>
-    <div v-else-if="!projects || projects.length === 0" class="empty">
-      <p>公開されているプロジェクトはありません。</p>
+    <div v-else-if="!sortedProjects || sortedProjects.length === 0" class="empty">
+      <p>該当するプロジェクトはありません。</p>
     </div>
     <div v-else class="grid">
       <div v-for="project in sortedProjects" :key="project._slug" class="card">
@@ -45,6 +51,7 @@
           <span>v{{ project.version || '0.0.0' }}</span>
           <span v-if="isDraftVersion(project.version)" class="badge badge-draft">ドラフト</span>
           <span>by {{ project.author || 'unknown' }}</span>
+          <span v-if="project.project_type === 'module'" class="badge badge-module">モジュール</span>
         </div>
 
         <div class="tags" v-if="project.tags && project.tags.length">
@@ -71,12 +78,25 @@ import { ref, computed } from 'vue'
 const { data: projects, pending } = await useFetch('/api/project-list')
 
 const sortOption = ref('updatedAtDesc')
+const filterType = ref('all')
+
+const projectTypes = [
+  { value: 'all', label: 'すべて' },
+  { value: 'model', label: 'モデル' },
+  { value: 'module', label: 'モジュール' }
+]
 
 const sortedProjects = computed(() => {
   if (!projects.value) return []
 
+  // Filter first
+  const filtered = projects.value.filter(p => {
+    if (filterType.value === 'all') return true
+    return p.project_type === filterType.value
+  })
+
   // Create a shallow copy to sort
-  const list = [...projects.value]
+  const list = [...filtered]
 
   return list.sort((a, b) => {
     if (sortOption.value === 'updatedAtDesc') {
@@ -223,6 +243,11 @@ function isDraftVersion(version) {
 .badge-draft {
   background: #fff3cd;
   color: #856404;
+}
+
+.badge-module {
+  background: #e1bee7;
+  color: #4a148c;
 }
 
 .downloads {
