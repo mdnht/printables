@@ -132,13 +132,11 @@ function handleImageError(event) {
 
 function isDraftVersion(version) {
   if (!version) return true;
-  try {
-    const parts = version.trim().split('.').map(Number);
-    if (parts.some(p => isNaN(p) || p < 0)) return false;
-    return parts[0] < 1;
-  } catch (e) {
-    return false;
-  }
+  if (typeof version !== 'string') return false;
+
+  const parts = version.trim().split('.').map(Number);
+  if (parts.some(p => isNaN(p) || p < 0)) return false;
+  return parts[0] < 1;
 }
 
 
