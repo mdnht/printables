@@ -1,23 +1,19 @@
 <template>
   <div>
     <div class="controls" v-if="projects && projects.length > 0">
-      <div class="control-group">
-        <label for="type-select">タイプ:</label>
-        <select id="type-select" v-model="filterType" class="sort-select">
-          <option value="all">すべて</option>
-          <option value="model">モデル</option>
-          <option value="module">モジュール</option>
-        </select>
-      </div>
-      <div class="control-group">
-        <label for="sort-select">並べ替え:</label>
-        <select id="sort-select" v-model="sortOption" class="sort-select">
+      <label for="type-select">タイプ:</label>
+      <select id="type-select" v-model="filterType" class="sort-select">
+        <option value="all">すべて</option>
+        <option value="model">モデル</option>
+        <option value="module">モジュール</option>
+      </select>
+      <label for="sort-select">並べ替え:</label>
+      <select id="sort-select" v-model="sortOption" class="sort-select">
         <option value="updatedAtDesc">更新日 (新しい順)</option>
         <option value="updatedAtAsc">更新日 (古い順)</option>
         <option value="nameAsc">プロジェクト名 (A-Z)</option>
         <option value="nameDesc">プロジェクト名 (Z-A)</option>
       </select>
-      </div>
     </div>
     <div v-if="pending" class="empty">
       Loading...
@@ -246,12 +242,6 @@ function isDraftVersion(version) {
 .badge-module {
   background: #e1bee7;
   color: #4a148c;
-}
-
-.control-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .downloads {
