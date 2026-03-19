@@ -3,9 +3,9 @@
     <div class="controls" v-if="projects && projects.length > 0">
       <label for="type-select">タイプ:</label>
       <select id="type-select" v-model="filterType" class="sort-select">
-        <option value="all">すべて</option>
-        <option value="model">モデル</option>
-        <option value="module">モジュール</option>
+        <option v-for="typeOption in projectTypes" :key="typeOption.value" :value="typeOption.value">
+          {{ typeOption.label }}
+        </option>
       </select>
       <label for="sort-select">並べ替え:</label>
       <select id="sort-select" v-model="sortOption" class="sort-select">
@@ -79,6 +79,12 @@ const { data: projects, pending } = await useFetch('/api/project-list')
 
 const sortOption = ref('updatedAtDesc')
 const filterType = ref('all')
+
+const projectTypes = [
+  { value: 'all', label: 'すべて' },
+  { value: 'model', label: 'モデル' },
+  { value: 'module', label: 'モジュール' }
+]
 
 const sortedProjects = computed(() => {
   if (!projects.value) return []
