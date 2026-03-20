@@ -37,16 +37,14 @@ function init() {
   controls.dampingFactor = 0.25
 
   // Lights
-  const ambientLight = new THREE.AmbientLight(0x404040)
-  scene.add(ambientLight)
+  const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6)
+  hemisphereLight.position.set(0, 200, 0)
+  scene.add(hemisphereLight)
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-  directionalLight.position.set(1, 1, 1).normalize()
-  scene.add(directionalLight)
-
-  const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5)
-  directionalLight2.position.set(-1, -1, -1).normalize()
-  scene.add(directionalLight2)
+  const cameraLight = new THREE.DirectionalLight(0xffffff, 0.8)
+  cameraLight.position.set(1, 1, 2)
+  camera.add(cameraLight)
+  scene.add(camera)
 
   window.addEventListener('resize', onWindowResize)
 
@@ -65,7 +63,18 @@ function loadStl() {
   const loader = new STLLoader()
   try {
     const geometry = loader.parse(props.stlData)
-    const material = new THREE.MeshPhongMaterial({ color: 0x0f3460, specular: 0x111111, shininess: 200 })
+
+    // Check if geometry has color data
+    const hasColors = geometry.hasAttribute('color')
+
+    // Use MeshStandardMaterial for better lighting interaction
+    const material = new THREE.MeshStandardMaterial({
+      color: hasColors ? 0xffffff : 0xffcc00, // White if it has vertex colors, otherwise clear yellow/orange default
+      roughness: 0.5,
+      metalness: 0.1,
+      vertexColors: hasColors
+    })
+
     mesh = new THREE.Mesh(geometry, material)
 
     // Center geometry
