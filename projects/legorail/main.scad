@@ -11,20 +11,20 @@ height = 8.0;  // Overall thickness
 // --- Plarail Track Parameters ---
 groove_width = 8.0;
 groove_depth = 3.5;
-groove_distance = 28.0; // Distance between the centers of the two grooves
+groove_distance = 27.0; // Reduced from 28.0 mathematically ensuring exactly 1.5mm thick outer rim walls
 
 // --- Plarail Joint Parameters (Wedge Shape) ---
 joint_thickness = 8.0; // Same thickness as main body
 joint_z_offset = 0.0; // Offset from the bottom
 joint_base_width = 9.0;     // Width at the narrow root
 joint_tip_width = 12.5;     // Width at the wide tip
-joint_length = 11.0;        // Total extension length
+joint_length = 9.0;         // Total extension length
 joint_clearance = 0.3;      // Tolerance for female socket
 
 // --- Lego Connection Parameters ---
 lego_pitch = 8.0;
-lego_cavity_min_x = -14.5;  // Left limit, clears the female joint cutout
-lego_cavity_max_x = 25.5;   // Right limit (-14.5 + 40.0 = 25.5), ensures exactly 40mm length cavity
+lego_cavity_min_x = -16.5;  // Left limit, cleanly avoids female joint (-17.2) keeping native 0.7mm margins
+lego_cavity_max_x = 23.5;   // Right limit (-16.5 + 40.0 = 23.5) re-establishing visually proportional centering
 lego_tube_od = 6.4;         // Tube outer diameter (Lego standard ~ 6.51mm, slightly less for tolerance)
 lego_tube_id = 4.9;         // Tube inner diameter (Lego standard ~ 4.8mm)
 lego_tube_height = 1.8;     // Insertion depth (cylinder height) for Lego compatibility
@@ -49,21 +49,21 @@ module plarail_lego_adapter() {
                 }
                 
                 // STEP 1.5 & 8: Unified Bottom Cavity (Lego + Male Joint Hollow)
-                // Mathematically guarantees exactly a 1mm wall at the joint root while connecting cavities.
+                // Mathematically guarantees exactly a 1.5mm wall at the joint root while connecting cavities.
                 translate([0, 0, -0.1])
                     linear_extrude(height=lego_tube_height + 0.1)
-                        offset(delta=-1.0)
+                        offset(delta=-1.5)
                             union() {
-                                translate([lego_cavity_min_x - 1.0, -width/2 - 1.1])
-                                    square([(length/2) - (lego_cavity_min_x - 1.0), width + 2.2]);
+                                translate([lego_cavity_min_x - 1.5, -width/2 - 1.6])
+                                    square([(length/2) - (lego_cavity_min_x - 1.5), width + 3.2]);
                                 translate([length/2, 0])
                                     plarail_joint_base2D(0);
                             }
             }
                 
             // STEP 3: Add Lego Tubes inside the already-hollowed cavity
-            // 4x3 array shifted to center perfectly in the 40mm cavity
-            for(x = [-6.5 : 8 : 17.5]) {
+            // 4x3 array identically offset centering across relocated 40.0mm boundaries perfectly
+            for(x = [-8.5 : 8 : 15.5]) {
                 for(y = [-8 : 8 : 8]) {
                     translate([x, y, 0])
                         cylinder(h = lego_tube_height, d = lego_tube_od);
@@ -74,7 +74,7 @@ module plarail_lego_adapter() {
         // --- REMAINING SUBTRACTIONS ---
         
         // STEP 4: Lego Tube Inner Holes
-        for(x = [-6.5 : 8 : 17.5]) {
+        for(x = [-8.5 : 8 : 15.5]) {
             for(y = [-8 : 8 : 8]) {
                 translate([x, y, -0.1])
                     cylinder(h = lego_tube_height + 0.2, d = lego_tube_id);
@@ -97,21 +97,21 @@ module plarail_lego_adapter() {
         }
         
         // STEP 5.5: Unified Center and Male Joint Hollow
-        // Uses a single 2D polygon offset to mathematically guarantee exactly a 1mm wall, avoiding separating walls from union block boundaries.
-        center_hollow_width = groove_distance - groove_width - 2.0; 
-        hollow_start_x = -length/2 + joint_length + joint_clearance + 1.0;
+        // Uses a single 2D polygon offset to mathematically guarantee exactly a 1.5mm wall, avoiding separating walls.
+        center_hollow_width = groove_distance - groove_width - 3.0; 
+        hollow_start_x = -length/2 + joint_length + joint_clearance + 1.5;
         translate([0, 0, height - 3.5])
             linear_extrude(height=3.5 + 1.0)
-                offset(delta=-1.0)
+                offset(delta=-1.5)
                     polygon([
-                        [hollow_start_x - 1.0, -(center_hollow_width + 2.0)/2],
-                        [length/2, -(center_hollow_width + 2.0)/2],
+                        [hollow_start_x - 1.5, -(center_hollow_width + 3.0)/2],
+                        [length/2, -(center_hollow_width + 3.0)/2],
                         [length/2, -joint_base_width/2],
                         [length/2 + joint_length, -joint_tip_width/2],
                         [length/2 + joint_length, joint_tip_width/2],
                         [length/2, joint_base_width/2],
-                        [length/2, (center_hollow_width + 2.0)/2],
-                        [hollow_start_x - 1.0, (center_hollow_width + 2.0)/2]
+                        [length/2, (center_hollow_width + 3.0)/2],
+                        [hollow_start_x - 1.5, (center_hollow_width + 3.0)/2]
                     ]);
                     
         // STEP 6: Plarail Female Joint Cutout
