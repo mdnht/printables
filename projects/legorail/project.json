@@ -1,0 +1,8 @@
+{
+    "name": "lego-rail",
+    "description": "レゴに接続できるプラレール互換のレール部品",
+    "version": "0.8.0",
+    "author": "mdnht",
+    "tags": ["lego", "plarail", "rail"],
+    "publish": true
+}
