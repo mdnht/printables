@@ -3,6 +3,7 @@
 // and Lego-compatible tube connections on the bottom.
 
 /* [Dimensions] */
+/* [Hidden] */
 // --- Base Dimensions ---
 length = 53.0; // Total track length excluding joint
 width = 38.0;  // Standard Plarail width
@@ -29,7 +30,6 @@ lego_tube_od = 6.4;         // Tube outer diameter (Lego standard ~ 6.51mm, slig
 lego_tube_id = 4.9;         // Tube inner diameter (Lego standard ~ 4.8mm)
 lego_tube_height = 1.8;     // Insertion depth (cylinder height) for Lego compatibility
 
-/* [Hidden] */
 $fn = 60; // Smoothness for cylinders
 
 // --- Main Module ---
