@@ -146,12 +146,30 @@ module deck_beam() {
         }
 
         // Two strap slots, positioned further towards the outer edges
+        // Added top and bottom chamfers (tapers) for easy strap insertion!
         for (sx=[-1, 1]) {
-            translate([sx * 35, 0, z + hook_outer])
+            z_cent = z + hook_outer - beam_thick/2;
+            translate([sx * 35, 0, z_cent]) {
+                // Bottom Taper
                 hull() {
-                    translate([ 15, 0, 0]) cylinder(r=2, h=10, center=true);
-                    translate([-15, 0, 0]) cylinder(r=2, h=10, center=true);
+                    translate([ 15, 0, -beam_thick/2 - 0.1]) cylinder(r=2.8, h=0.1);
+                    translate([-15, 0, -beam_thick/2 - 0.1]) cylinder(r=2.8, h=0.1);
+                    translate([ 15, 0, -beam_thick/2 + 0.8]) cylinder(r=2, h=0.1);
+                    translate([-15, 0, -beam_thick/2 + 0.8]) cylinder(r=2, h=0.1);
                 }
+                // Straight Body
+                hull() {
+                    translate([ 15, 0, -beam_thick/2 + 0.7]) cylinder(r=2, h=2.1);
+                    translate([-15, 0, -beam_thick/2 + 0.7]) cylinder(r=2, h=2.1);
+                }
+                // Top Taper
+                hull() {
+                    translate([ 15, 0, beam_thick/2 - 0.8]) cylinder(r=2, h=0.1);
+                    translate([-15, 0, beam_thick/2 - 0.8]) cylinder(r=2, h=0.1);
+                    translate([ 15, 0, beam_thick/2]) cylinder(r=2.8, h=0.1);
+                    translate([-15, 0, beam_thick/2]) cylinder(r=2.8, h=0.1);
+                }
+            }
         }
     }
 }
