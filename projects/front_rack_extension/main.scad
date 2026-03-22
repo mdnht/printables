@@ -35,7 +35,7 @@ bot_x     = rack_w / 2;
 top_x     = (deck_w/2) - (tube_dia/2);
 leg_top_z = deck_height - leg_tube_dia/2;
 beam_y_positions = [27, -27];
-$fn = 60;
+$fn = 40;
 
 function vlen(v) = sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
 function vnorm(v) = v / vlen(v);
@@ -58,13 +58,28 @@ module eccentric_partial_ring(ri, ro, a0, a1, shift_in_y=0, shift_out_y=0) {
     }
 }
 
-// Tube clip (bottom snap fit to rack with eccentric strength profile)
+// Tube clip (bottom snap fit to rack with eccentric strength profile + 45° chamfer)
 module tube_clip(len) {
     cor = tube_dia/2 + 3.0;  // 9.0mm outer radius
     cir = tube_dia/2 + 0.15; // 6.15mm inner radius
+    chamf = 0.5;
     rotate([90,0,0]) translate([0,0,-len/2])
-        linear_extrude(height=len)
-            eccentric_partial_ring(cir, cor, -38, 218, 0, 1.5);
+        difference() {
+            linear_extrude(height=len)
+                eccentric_partial_ring(cir, cor, -38, 218, 0, 1.5);
+            // Front face chamfer (cone at eccentric outer center)
+            translate([0, 1.5, -0.01])
+                difference() {
+                    cylinder(r=cor+5, h=chamf+0.01);
+                    cylinder(r1=cor-chamf, r2=cor, h=chamf+0.01);
+                }
+            // Back face chamfer
+            translate([0, 1.5, len-chamf])
+                difference() {
+                    cylinder(r=cor+5, h=chamf+0.01);
+                    cylinder(r1=cor, r2=cor-chamf, h=chamf+0.01);
+                }
+        }
 }
 
 // Leg module
@@ -73,7 +88,8 @@ module leg(is_right) {
     bx = bot_x*s;  tx = top_x*s;
     fy = rack_length/2;  ry = -rack_length/2;
     // Set z_bot to 0 so the leg tube axis perfectly intersects the C-clamp center
-    z_bot = 0;  
+    z_bot = 0;
+    clip_length = 30;
     R = 10;  st = 15;
     V = [tx-bx,0,leg_top_z-z_bot];  u = vnorm(V);
     uf=[0,-1,0]; ur=[0,1,0];
@@ -83,38 +99,62 @@ module leg(is_right) {
     Phf=[tx,fy,leg_top_z]+uf*R; Phr=[tx,ry,leg_top_z]+ur*R;
     ha = is_right ? hook_R : hook_L;
 
-    difference() {
-        union() {
-            translate([bx,fy,0]) tube_clip(20);
-            translate([bx,ry,0]) tube_clip(20);
-            color("Silver") {
-                hull() { translate([bx,fy,z_bot]) sphere(d=leg_tube_dia);
-                         translate(Puf) sphere(d=leg_tube_dia); }
-                for(i=[0:st-1]) hull() {
-                    translate(Cf+u*R*cos(i*90/st)-uf*R*sin(i*90/st)) sphere(d=leg_tube_dia);
-                    translate(Cf+u*R*cos((i+1)*90/st)-uf*R*sin((i+1)*90/st)) sphere(d=leg_tube_dia);
+    union() {
+        difference() {
+            union() {
+                translate([bx,fy,0]) tube_clip(clip_length);
+                translate([bx,ry,0]) tube_clip(clip_length);
+                color("Silver") {
+                    hull() { translate([bx,fy,z_bot]) sphere(d=leg_tube_dia);
+                             translate(Puf) sphere(d=leg_tube_dia); }
+                    for(i=[0:st-1]) hull() {
+                        translate(Cf+u*R*cos(i*90/st)-uf*R*sin(i*90/st)) sphere(d=leg_tube_dia);
+                        translate(Cf+u*R*cos((i+1)*90/st)-uf*R*sin((i+1)*90/st)) sphere(d=leg_tube_dia);
+                    }
+                    hull() { translate(Phf) sphere(d=leg_tube_dia);
+                             translate(Phr) sphere(d=leg_tube_dia); }
+                    for(i=[0:st-1]) hull() {
+                        translate(Cr+u*R*cos(i*90/st)-ur*R*sin(i*90/st)) sphere(d=leg_tube_dia);
+                        translate(Cr+u*R*cos((i+1)*90/st)-ur*R*sin((i+1)*90/st)) sphere(d=leg_tube_dia);
+                    }
+                    hull() { translate(Pur) sphere(d=leg_tube_dia);
+                             translate([bx,ry,z_bot]) sphere(d=leg_tube_dia); }
                 }
-                hull() { translate(Phf) sphere(d=leg_tube_dia);
-                         translate(Phr) sphere(d=leg_tube_dia); }
-                for(i=[0:st-1]) hull() {
-                    translate(Cr+u*R*cos(i*90/st)-ur*R*sin(i*90/st)) sphere(d=leg_tube_dia);
-                    translate(Cr+u*R*cos((i+1)*90/st)-ur*R*sin((i+1)*90/st)) sphere(d=leg_tube_dia);
-                }
-                hull() { translate(Pur) sphere(d=leg_tube_dia);
-                         translate([bx,ry,z_bot]) sphere(d=leg_tube_dia); }
+            }
+            // Partial notch only where hook wraps, width strictly beam_w
+            for(y=beam_y_positions)
+                translate([tx,y,leg_top_z]) rotate([90,0,0]) translate([0,0,-beam_w/2 - 0.2])
+                    linear_extrude(height=beam_w + 0.4)
+                        eccentric_partial_ring(notch_r, leg_tube_dia/2+0.1, ha[0]-3, ha[1]+3, -1.0, 0);
+
+            // Clear out any structural tubes protruding into the C-clip interior
+            for(y=[fy, ry]) {
+                translate([bx, y, 0])
+                    rotate([90,0,0])
+                        cylinder(r=tube_dia/2 + 0.15, h=30, center=true);
             }
         }
-        // Partial notch only where hook wraps, width strictly beam_w
-        for(y=beam_y_positions)
-            translate([tx,y,leg_top_z]) rotate([90,0,0]) translate([0,0,-beam_w/2 - 0.2])
-                linear_extrude(height=beam_w + 0.4)
-                    eccentric_partial_ring(notch_r, leg_tube_dia/2+0.1, ha[0]-3, ha[1]+3, -1.0, 0);
 
-        // Clear out any structural tubes protruding into the C-clip interior
-        for(y=[fy, ry]) {
-            translate([bx, y, 0])
-                rotate([90,0,0])
-                    cylinder(r=tube_dia/2 + 0.15, h=30, center=true);
+        // Stress-relief tapers: smooth ramps filling the sharp 90° corners
+        // hull() between the full 12mm tube at the neck edge and the small eccentric 7mm inside the neck
+        for(y=beam_y_positions) {
+            translate([tx,y,leg_top_z]) rotate([90,0,0]) {
+                for(side=[-1,1]) {
+                    intersection() {
+                        hull() {
+                            // At neck edge: full 12mm circle, centered
+                            translate([0, 0, side*(beam_w/2 + 0.2)])
+                                cylinder(r=leg_tube_dia/2, h=0.1);
+                            // 2.5mm INWARD toward neck center: 7mm circle, eccentric -1mm
+                            translate([0, -1.0, side*(beam_w/2 + 0.2 - 2.5)])
+                                cylinder(r=notch_r, h=0.1);
+                        }
+                        // Only keep the hook-side sector
+                        linear_extrude(height=100, center=true)
+                            sector2d(ha[0]-3, ha[1]+3);
+                    }
+                }
+            }
         }
     }
 }
@@ -124,25 +164,59 @@ module deck_beam() {
     z = leg_top_z;
     difference() {
         union() {
-            // Right hook (width strictly beam_w)
-            translate([top_x,0,z]) rotate([90,0,0]) translate([0,0,-beam_w/2])
-                linear_extrude(height=beam_w) eccentric_partial_ring(hook_inner, hook_outer, hook_R[0], hook_R[1], -1.0, 0);
-            // Left hook (width strictly beam_w)
-            translate([-top_x,0,z]) rotate([90,0,0]) translate([0,0,-beam_w/2])
-                linear_extrude(height=beam_w) eccentric_partial_ring(hook_inner, hook_outer, hook_L[0], hook_L[1], -1.0, 0);
-            // Bridge
-            hull() {
-                translate([ top_x,0,z+hook_outer-beam_thick/2]) cube([0.1,beam_w,beam_thick], center=true);
-                translate([-top_x,0,z+hook_outer-beam_thick/2]) cube([0.1,beam_w,beam_thick], center=true);
+            // Right hook (with 45° chamfer)
+            translate([top_x,0,z]) rotate([90,0,0])
+                difference() {
+                    translate([0,0,-beam_w/2])
+                        linear_extrude(height=beam_w) eccentric_partial_ring(hook_inner, hook_outer, hook_R[0], hook_R[1], -1.0, 0);
+                    translate([0, 0, -beam_w/2 - 0.01])
+                        difference() { cylinder(r=hook_outer+5, h=0.51); cylinder(r1=hook_outer-0.5, r2=hook_outer, h=0.51); }
+                    translate([0, 0, beam_w/2 - 0.5])
+                        difference() { cylinder(r=hook_outer+5, h=0.51); cylinder(r1=hook_outer, r2=hook_outer-0.5, h=0.51); }
+                }
+            // Left hook (with 45° chamfer)
+            translate([-top_x,0,z]) rotate([90,0,0])
+                difference() {
+                    translate([0,0,-beam_w/2])
+                        linear_extrude(height=beam_w) eccentric_partial_ring(hook_inner, hook_outer, hook_L[0], hook_L[1], -1.0, 0);
+                    translate([0, 0, -beam_w/2 - 0.01])
+                        difference() { cylinder(r=hook_outer+5, h=0.51); cylinder(r1=hook_outer-0.5, r2=hook_outer, h=0.51); }
+                    translate([0, 0, beam_w/2 - 0.5])
+                        difference() { cylinder(r=hook_outer+5, h=0.51); cylinder(r1=hook_outer, r2=hook_outer-0.5, h=0.51); }
+                }
+            // Bridge (with 45° chamfer applied only to the bridge plate)
+            difference() {
+                hull() {
+                    translate([ top_x,0,z+hook_outer-beam_thick/2]) cube([0.1,beam_w,beam_thick], center=true);
+                    translate([-top_x,0,z+hook_outer-beam_thick/2]) cube([0.1,beam_w,beam_thick], center=true);
+                }
+                for(yy=[beam_w/2, -beam_w/2])
+                    for(zz=[z+hook_outer, z+hook_outer-beam_thick])
+                        translate([0, yy, zz])
+                            rotate([45,0,0])
+                                cube([deck_w+10, 0.71, 0.71], center=true);
             }
         }
 
-        // Hook bore ensuring perfectly matched interior.
-        // We elegantly shift the inner tube bore down perfectly mimicking the eccentric neck.
+        // Hook bore
         for (xs=[-1,1]) {
             translate([xs*top_x, 0, z])
                 rotate([90,0,0])
                     translate([0, -1.0, 0]) cylinder(r=hook_inner, h=beam_w+2, center=true);
+        }
+
+        // Matching taper cutouts
+        for (xs=[-1,1]) {
+            translate([xs*top_x, 0, z]) rotate([90,0,0]) {
+                for(side=[-1,1]) {
+                    hull() {
+                        translate([0, 0, side*(beam_w/2 + 0.2)])
+                            cylinder(r=leg_tube_dia/2, h=0.1);
+                        translate([0, -1.0, side*(beam_w/2 + 0.2 - 2.5)])
+                            cylinder(r=notch_r, h=0.1);
+                    }
+                }
+            }
         }
 
         // Two strap slots, positioned further towards the outer edges
@@ -182,7 +256,7 @@ module assembly() {
     
     // Position beams directly in their flush pockets
     color("Coral") translate([0, beam_y_positions[0], 0]) deck_beam();
-    color("Gold")  translate([0, beam_y_positions[1], 0]) deck_beam();
+    color("Gold")  translate([0, beam_y_positions[1], 60]) deck_beam(); // lifted to show joint
 }
 
 if (part==0) assembly();
