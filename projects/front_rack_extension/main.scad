@@ -256,7 +256,7 @@ module assembly() {
     
     // Position beams directly in their flush pockets
     color("Coral") translate([0, beam_y_positions[0], 0]) deck_beam();
-    color("Gold")  translate([0, beam_y_positions[1], 60]) deck_beam(); // lifted to show joint
+    color("Gold")  translate([0, beam_y_positions[1], 0]) deck_beam();
 }
 
 if (part==0) assembly();
