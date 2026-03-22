@@ -48,5 +48,10 @@ export default defineNuxtConfig({
       crawlLinks: true,
       routes: ['/', ...apiRoutes]
     }
+  },
+  vite: {
+    worker: {
+      format: 'es'
+    }
   }
 })

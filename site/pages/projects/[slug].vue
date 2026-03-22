@@ -60,9 +60,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { createOpenSCAD } from 'openscad-wasm-prebuilt'
+import MyWorker from '~/utils/openscad.worker?worker'
 import StlViewer from '~/components/StlViewer.vue'
 
 const route = useRoute()
@@ -70,11 +70,39 @@ const slug = route.params.slug
 
 const { data: project, pending } = await useFetch(`/api/projects/${slug}`)
 
+
 const scadCode = ref('')
 const stlData = ref(null)
 const isRendering = ref(false)
 const renderError = ref(null)
-let openscadInstance = null
+let worker = null
+
+onMounted(() => {
+  if (import.meta.client) {
+    worker = new MyWorker()
+    worker.onmessage = (e) => {
+      const { type, message, error, stlContent } = e.data
+      if (type === 'success') {
+        stlData.value = stlContent
+        isRendering.value = false
+      } else if (type === 'fatal') {
+        renderError.value = 'Failed to render 3D model: ' + error
+        isRendering.value = false
+      } else if (type === 'error') {
+        console.error('OpenSCAD error:', message)
+      } else if (type === 'log') {
+        console.log('OpenSCAD log:', message)
+      }
+    }
+  }
+})
+
+// Clean up worker when component is unmounted
+onUnmounted(() => {
+  if (worker) {
+    worker.terminate()
+  }
+})
 
 watch(project, (newProject) => {
   if (newProject && newProject.scadCode) {
@@ -85,25 +113,15 @@ watch(project, (newProject) => {
 }, { immediate: true })
 
 async function renderScad() {
-  if (!scadCode.value) return
+  if (!scadCode.value || !import.meta.client) return
 
   isRendering.value = true
   renderError.value = null
 
-  try {
-    if (!openscadInstance) {
-      openscadInstance = await createOpenSCAD({
-        print: console.log,
-        printErr: console.error
-      })
-    }
-
-    const stlContent = await openscadInstance.renderToStl(scadCode.value)
-    stlData.value = stlContent
-  } catch (err) {
-    console.error('Render error:', err)
-    renderError.value = 'Failed to render 3D model: ' + err.message
-  } finally {
+  if (worker) {
+    worker.postMessage({ code: scadCode.value, id: Date.now() })
+  } else {
+    renderError.value = 'Worker not initialized'
     isRendering.value = false
   }
 }
