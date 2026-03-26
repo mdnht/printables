@@ -1,11 +1,13 @@
+import { execFile } from 'child_process'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
 import util from 'util'
 
 const execPromise = util.promisify(exec)
+const execFileAsync = util.promisify(execFile)
 
-export default defineEventHandler(async (event) => {
+const handler = async (event: any) => {
   const slug = getRouterParam(event, 'slug')
   const projectsDir = path.resolve(process.cwd(), '../projects')
   const projectDir = path.join(projectsDir, slug)
@@ -17,6 +19,30 @@ export default defineEventHandler(async (event) => {
 
     if (data.publish) {
       data._slug = slug
+
+      // Add last modified date from git log if available
+      let updatedAt: string | undefined;
+      try {
+        const { stdout } = await execFileAsync('git', ['log', '-1', '--format=%cI', '--', projectDir])
+        const gitDate = stdout.trim()
+        if (gitDate) {
+          updatedAt = new Date(gitDate).toISOString()
+        }
+      } catch (e) {
+        // Git log failed, proceed to fallback
+      }
+
+      if (!updatedAt) {
+        // Fallback to mtime if git log failed or returned no date
+        try {
+          const stat = await fs.stat(projectJsonPath)
+          updatedAt = stat.mtime.toISOString()
+        } catch (e) {
+          // If fs.stat also fails, set a default date.
+          updatedAt = new Date(0).toISOString()
+        }
+      }
+      data.updatedAt = updatedAt
 
       // Check if the download artifact exists during generation
       let hasDownload = false
@@ -63,4 +89,6 @@ export default defineEventHandler(async (event) => {
     console.error(`Error reading project ${slug}:`, err)
     return null
   }
-})
+}
+
+export default typeof defineEventHandler === 'function' ? defineEventHandler(handler) : handler
