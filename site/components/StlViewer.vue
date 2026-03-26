@@ -15,6 +15,30 @@ const props = defineProps({
   }
 })
 
+// Constants for scene setup and materials
+const COLOR_WHITE = 0xffffff
+const SCENE_BG_COLOR = 0xf0f0f0
+const CAMERA_FOV = 45
+const CAMERA_NEAR = 1
+const CAMERA_FAR = 1000
+const CAMERA_INITIAL_POS = new THREE.Vector3(200, 200, 200)
+
+const CONTROLS_DAMPING_FACTOR = 0.25
+
+const HEMI_LIGHT_SKY_COLOR = COLOR_WHITE
+const HEMI_LIGHT_GROUND_COLOR = 0x444444
+const HEMI_LIGHT_INTENSITY = 0.6
+const HEMI_LIGHT_POS = new THREE.Vector3(0, 200, 0)
+
+const DIR_LIGHT_COLOR = COLOR_WHITE
+const DIR_LIGHT_INTENSITY = 0.8
+const DIR_LIGHT_POS = new THREE.Vector3(1, 1, 2)
+
+const MATERIAL_DEFAULT_COLOR = 0xffcc00
+const MATERIAL_VERTEX_COLOR = COLOR_WHITE
+const MATERIAL_ROUGHNESS = 0.5
+const MATERIAL_METALNESS = 0.1
+
 const container = ref(null)
 let scene, camera, renderer, controls, mesh
 
@@ -23,10 +47,10 @@ function init() {
 
   // Basic Three.js setup
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0xf0f0f0)
+  scene.background = new THREE.Color(SCENE_BG_COLOR)
 
-  camera = new THREE.PerspectiveCamera(45, container.value.clientWidth / container.value.clientHeight, 1, 1000)
-  camera.position.set(200, 200, 200)
+  camera = new THREE.PerspectiveCamera(CAMERA_FOV, container.value.clientWidth / container.value.clientHeight, CAMERA_NEAR, CAMERA_FAR)
+  camera.position.copy(CAMERA_INITIAL_POS)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
@@ -34,15 +58,15 @@ function init() {
 
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
-  controls.dampingFactor = 0.25
+  controls.dampingFactor = CONTROLS_DAMPING_FACTOR
 
   // Lights
-  const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6)
-  hemisphereLight.position.set(0, 200, 0)
+  const hemisphereLight = new THREE.HemisphereLight(HEMI_LIGHT_SKY_COLOR, HEMI_LIGHT_GROUND_COLOR, HEMI_LIGHT_INTENSITY)
+  hemisphereLight.position.copy(HEMI_LIGHT_POS)
   scene.add(hemisphereLight)
 
-  const cameraLight = new THREE.DirectionalLight(0xffffff, 0.8)
-  cameraLight.position.set(1, 1, 2)
+  const cameraLight = new THREE.DirectionalLight(DIR_LIGHT_COLOR, DIR_LIGHT_INTENSITY)
+  cameraLight.position.copy(DIR_LIGHT_POS)
   camera.add(cameraLight)
   scene.add(camera)
 
@@ -69,9 +93,9 @@ function loadStl() {
 
     // Use MeshStandardMaterial for better lighting interaction
     const material = new THREE.MeshStandardMaterial({
-      color: hasColors ? 0xffffff : 0xffcc00, // White if it has vertex colors, otherwise clear yellow/orange default
-      roughness: 0.5,
-      metalness: 0.1,
+      color: hasColors ? MATERIAL_VERTEX_COLOR : MATERIAL_DEFAULT_COLOR, // White if it has vertex colors, otherwise clear yellow/orange default
+      roughness: MATERIAL_ROUGHNESS,
+      metalness: MATERIAL_METALNESS,
       vertexColors: hasColors
     })
 
