@@ -27,23 +27,20 @@ const handler = async (event) => {
         // Set project_type, defaulting to 'model'
         data.project_type = data.project_type || 'model'
 
-        // Add last modified date
-        try {
-          const stat = await fs.stat(projectJsonPath)
-          data.updatedAt = stat.mtime.toISOString()
-        } catch (e) {
-          data.updatedAt = new Date(0).toISOString()
-        }
+        // Add last modified date and check for download artifact concurrently
+        const updatedAtPromise = fs
+          .stat(projectJsonPath)
+          .then((stat) => stat.mtime.toISOString())
+          .catch(() => new Date(0).toISOString())
 
-        // Check if the download artifact exists during generation
-        let hasDownload = false
-        try {
-          const zipPath = path.resolve(process.cwd(), 'public/downloads', `${entry.name}.zip`)
-          const stat = await fs.stat(zipPath)
-          hasDownload = stat.isFile()
-        } catch (e) {
-          // file doesn't exist
-        }
+        const zipPath = path.resolve(process.cwd(), 'public/downloads', `${entry.name}.zip`)
+        const hasDownloadPromise = fs
+          .stat(zipPath)
+          .then((stat) => stat.isFile())
+          .catch(() => false)
+
+        const [updatedAt, hasDownload] = await Promise.all([updatedAtPromise, hasDownloadPromise])
+        data.updatedAt = updatedAt
         data.hasDownload = hasDownload
 
         return data
