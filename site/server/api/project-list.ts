@@ -31,25 +31,29 @@ const handler = async (event: any) => {
             data.project_type = data.project_type || 'model'
 
             // Add last modified date from git log if available
+            let updatedAt: string | undefined;
             try {
               const projectPath = path.join(projectsDir, entry.name)
               const { stdout } = await execFileAsync('git', ['log', '-1', '--format=%cI', '--', projectPath])
               const gitDate = stdout.trim()
               if (gitDate) {
-                data.updatedAt = new Date(gitDate).toISOString()
-              } else {
-                // Fallback to mtime if no git history (e.g. newly added file not committed)
-                const stat = await fs.stat(projectJsonPath)
-                data.updatedAt = stat.mtime.toISOString()
+                updatedAt = new Date(gitDate).toISOString()
               }
             } catch (e) {
+              // Git log failed, proceed to fallback
+            }
+
+            if (!updatedAt) {
+              // Fallback to mtime if git log failed or returned no date
               try {
                 const stat = await fs.stat(projectJsonPath)
-                data.updatedAt = stat.mtime.toISOString()
-              } catch (e2) {
-                data.updatedAt = new Date(0).toISOString()
+                updatedAt = stat.mtime.toISOString()
+              } catch (e) {
+                // If fs.stat also fails, set a default date.
+                updatedAt = new Date(0).toISOString()
               }
             }
+            data.updatedAt = updatedAt
 
             // Check if the download artifact exists during generation
             let hasDownload = false
