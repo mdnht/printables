@@ -79,15 +79,17 @@ const sortedProjects = computed(() => {
   const list = [...projects.value]
 
   return list.sort((a, b) => {
-    const dateA = new Date(a.updatedAt || 0).getTime()
-    const dateB = new Date(b.updatedAt || 0).getTime()
-    const nameA = a.name || ''
-    const nameB = b.name || ''
-
-    if (sortOption.value === 'updatedAtDesc') return dateB - dateA
-    if (sortOption.value === 'updatedAtAsc') return dateA - dateB
-    if (sortOption.value === 'nameAsc') return nameA.localeCompare(nameB)
-    if (sortOption.value === 'nameDesc') return nameB.localeCompare(nameA)
+    const option = sortOption.value
+    if (option.startsWith('updatedAt')) {
+      const dateA = new Date(a.updatedAt || 0).getTime()
+      const dateB = new Date(b.updatedAt || 0).getTime()
+      return option === 'updatedAtDesc' ? dateB - dateA : dateA - dateB
+    }
+    if (option.startsWith('name')) {
+      const nameA = a.name || ''
+      const nameB = b.name || ''
+      return option === 'nameAsc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA)
+    }
     return 0
   })
 })
