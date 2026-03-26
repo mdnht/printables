@@ -20,18 +20,18 @@ const SCENE_BG_COLOR = 0xf0f0f0
 const CAMERA_FOV = 45
 const CAMERA_NEAR = 1
 const CAMERA_FAR = 1000
-const CAMERA_INITIAL_POS = { x: 200, y: 200, z: 200 }
+const CAMERA_INITIAL_POS = new THREE.Vector3(200, 200, 200)
 
 const CONTROLS_DAMPING_FACTOR = 0.25
 
 const HEMI_LIGHT_SKY_COLOR = 0xffffff
 const HEMI_LIGHT_GROUND_COLOR = 0x444444
 const HEMI_LIGHT_INTENSITY = 0.6
-const HEMI_LIGHT_POS = { x: 0, y: 200, z: 0 }
+const HEMI_LIGHT_POS = new THREE.Vector3(0, 200, 0)
 
 const DIR_LIGHT_COLOR = 0xffffff
 const DIR_LIGHT_INTENSITY = 0.8
-const DIR_LIGHT_POS = { x: 1, y: 1, z: 2 }
+const DIR_LIGHT_POS = new THREE.Vector3(1, 1, 2)
 
 const MATERIAL_DEFAULT_COLOR = 0xffcc00
 const MATERIAL_VERTEX_COLOR = 0xffffff
@@ -49,7 +49,7 @@ function init() {
   scene.background = new THREE.Color(SCENE_BG_COLOR)
 
   camera = new THREE.PerspectiveCamera(CAMERA_FOV, container.value.clientWidth / container.value.clientHeight, CAMERA_NEAR, CAMERA_FAR)
-  camera.position.set(CAMERA_INITIAL_POS.x, CAMERA_INITIAL_POS.y, CAMERA_INITIAL_POS.z)
+  camera.position.copy(CAMERA_INITIAL_POS)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
@@ -61,11 +61,11 @@ function init() {
 
   // Lights
   const hemisphereLight = new THREE.HemisphereLight(HEMI_LIGHT_SKY_COLOR, HEMI_LIGHT_GROUND_COLOR, HEMI_LIGHT_INTENSITY)
-  hemisphereLight.position.set(HEMI_LIGHT_POS.x, HEMI_LIGHT_POS.y, HEMI_LIGHT_POS.z)
+  hemisphereLight.position.copy(HEMI_LIGHT_POS)
   scene.add(hemisphereLight)
 
   const cameraLight = new THREE.DirectionalLight(DIR_LIGHT_COLOR, DIR_LIGHT_INTENSITY)
-  cameraLight.position.set(DIR_LIGHT_POS.x, DIR_LIGHT_POS.y, DIR_LIGHT_POS.z)
+  cameraLight.position.copy(DIR_LIGHT_POS)
   camera.add(cameraLight)
   scene.add(camera)
 
