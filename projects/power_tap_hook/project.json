@@ -1,0 +1,11 @@
+{
+    "name": "power-tap-hook",
+    "description": "",
+    "version": "0.5.0",
+    "author": "mdnht",
+    "tags": [
+        "電源タップ",
+        "フック"
+    ],
+    "publish": true
+}
