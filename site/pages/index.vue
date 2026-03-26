@@ -99,22 +99,16 @@ const sortedProjects = computed(() => {
   const list = [...filtered]
 
   return list.sort((a, b) => {
-    if (sortOption.value === 'updatedAtDesc') {
-      const dateA = new Date(a.updatedAt || 0)
-      const dateB = new Date(b.updatedAt || 0)
-      return dateB.getTime() - dateA.getTime()
-    } else if (sortOption.value === 'updatedAtAsc') {
-      const dateA = new Date(a.updatedAt || 0)
-      const dateB = new Date(b.updatedAt || 0)
-      return dateA.getTime() - dateB.getTime()
-    } else if (sortOption.value === 'nameAsc') {
+    const option = sortOption.value
+    if (option.startsWith('updatedAt')) {
+      const dateA = new Date(a.updatedAt || 0).getTime()
+      const dateB = new Date(b.updatedAt || 0).getTime()
+      return option === 'updatedAtDesc' ? dateB - dateA : dateA - dateB
+    }
+    if (option.startsWith('name')) {
       const nameA = a.name || ''
       const nameB = b.name || ''
-      return nameA.localeCompare(nameB)
-    } else if (sortOption.value === 'nameDesc') {
-      const nameA = a.name || ''
-      const nameB = b.name || ''
-      return nameB.localeCompare(nameA)
+      return option === 'nameAsc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA)
     }
     return 0
   })
