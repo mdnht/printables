@@ -16,6 +16,7 @@ const props = defineProps({
 })
 
 // Constants for scene setup and materials
+const COLOR_WHITE = 0xffffff
 const SCENE_BG_COLOR = 0xf0f0f0
 const CAMERA_FOV = 45
 const CAMERA_NEAR = 1
@@ -24,17 +25,17 @@ const CAMERA_INITIAL_POS = new THREE.Vector3(200, 200, 200)
 
 const CONTROLS_DAMPING_FACTOR = 0.25
 
-const HEMI_LIGHT_SKY_COLOR = 0xffffff
+const HEMI_LIGHT_SKY_COLOR = COLOR_WHITE
 const HEMI_LIGHT_GROUND_COLOR = 0x444444
 const HEMI_LIGHT_INTENSITY = 0.6
 const HEMI_LIGHT_POS = new THREE.Vector3(0, 200, 0)
 
-const DIR_LIGHT_COLOR = 0xffffff
+const DIR_LIGHT_COLOR = COLOR_WHITE
 const DIR_LIGHT_INTENSITY = 0.8
 const DIR_LIGHT_POS = new THREE.Vector3(1, 1, 2)
 
 const MATERIAL_DEFAULT_COLOR = 0xffcc00
-const MATERIAL_VERTEX_COLOR = 0xffffff
+const MATERIAL_VERTEX_COLOR = COLOR_WHITE
 const MATERIAL_ROUGHNESS = 0.5
 const MATERIAL_METALNESS = 0.1
 
