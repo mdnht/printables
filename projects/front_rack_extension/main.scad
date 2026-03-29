@@ -6,12 +6,14 @@
 // with the hook ring.
 
 /* [Which part to render] */
-part = -1; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_beam]
+part = 0; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_beam]
 
 /* [Dimensions] */
 rack_outer_width = 102;
 tube_dia         = 12;
-rack_length      = 100;
+rack_length      = 104;
+clip_length      = 25;
+clip_y_offset    = 5.5;
 deck_w           = 150;
 deck_height      = 120;
 beam_thick       = 3.5;
@@ -91,7 +93,6 @@ module leg(is_right) {
     fy = rack_length/2;  ry = -rack_length/2;
     // Set z_bot to 0 so the leg tube axis perfectly intersects the C-clamp center
     z_bot = 0;
-    clip_length = 30;
     R = 10;  st = 15;
     V = [tx-bx,0,leg_top_z-z_bot];  u = vnorm(V);
     uf=[0,-1,0]; ur=[0,1,0];
@@ -104,8 +105,8 @@ module leg(is_right) {
     union() {
         difference() {
             union() {
-                translate([bx,fy,0]) tube_clip(clip_length);
-                translate([bx,ry,0]) tube_clip(clip_length);
+                translate([bx,fy + clip_y_offset,0]) tube_clip(clip_length);
+                translate([bx,ry - clip_y_offset,0]) tube_clip(clip_length);
                 color("Silver") {
                     hull() { translate([bx,fy,z_bot]) sphere(d=leg_tube_dia);
                              translate(Puf) sphere(d=leg_tube_dia); }
@@ -130,10 +131,10 @@ module leg(is_right) {
                         eccentric_partial_ring(notch_r, leg_tube_dia/2+0.1, ha[0]-3, ha[1]+3, -1.0, 0);
 
             // Clear out any structural tubes protruding into the C-clip interior
-            for(y=[fy, ry]) {
+            for(y=[fy + clip_y_offset, ry - clip_y_offset]) {
                 translate([bx, y, 0])
                     rotate([90,0,0])
-                        cylinder(r=tube_dia/2 + 0.15, h=30, center=true);
+                        cylinder(r=tube_dia/2 + 0.15, h=clip_length + 2, center=true);
             }
         }
 

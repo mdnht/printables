@@ -1,8 +1,13 @@
 {
     "name": "front_rack_extension",
     "description": "フロントラックの延長パーツ",
-    "version": "0.9.0",
+    "version": "1.0.0",
     "author": "mdnht",
-    "tags": ["フロントラック", "Grand Expedition", "TUBUS", "フロントキャリア"],
+    "tags": [
+        "フロントラック",
+        "Grand Expedition",
+        "TUBUS",
+        "フロントキャリア"
+    ],
     "publish": true
 }
