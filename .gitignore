@@ -17,6 +17,7 @@ _site/
 # OS files
 .DS_Store
 Thumbs.db
+*:Zone.Identifier
 
 # Editor files
 .vscode/
