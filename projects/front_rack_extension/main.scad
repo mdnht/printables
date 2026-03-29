@@ -1,10 +1,12 @@
+
+
 // TUBUS GRAND EXPEDITION Front Rack Extension
 // Hook-and-notch flush joint design with deep 5 o'clock outer wrap.
 // Fixed the bridge integration so the top and bottom merge seamlessly
 // with the hook ring.
 
 /* [Which part to render] */
-part = 0; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_beam]
+part = -1; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_beam]
 
 /* [Dimensions] */
 rack_outer_width = 102;
@@ -252,6 +254,7 @@ module deck_beam() {
 // Assembly
 // ============================================================
 module assembly() {
+    
     leg(false); leg(true);
     
     // Position beams directly in their flush pockets
@@ -259,7 +262,8 @@ module assembly() {
     color("Gold")  translate([0, beam_y_positions[1], 0]) deck_beam();
 }
 
-if (part==0) assembly();
+if (part==0) render(){assembly();}
+else if (part==-1) assembly();
 else if (part==1) translate([rack_w/2,0,0]) leg(false);
 else if (part==2) translate([-rack_w/2,0,0]) leg(true);
 else if (part==3) rotate([180,0,0]) translate([0,0,-deck_height]) deck_beam();
