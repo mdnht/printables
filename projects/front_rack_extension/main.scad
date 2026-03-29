@@ -6,7 +6,7 @@
 // with the hook ring.
 
 /* [Which part to render] */
-part = 0; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_beam, 4:print_layout]
+part = 4; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_beam, 4:print_layout]
 
 /* [Dimensions] */
 rack_outer_width = 102;
@@ -153,17 +153,17 @@ module single_leg(is_right, is_front) {
             
             // Front/rear reinforcement gusset at clip-leg junction
             // Simple: create vertical gusset, then tilt to match leg angle → auto 90°
-            color("Silver") {
-                gusset_h = 12;    // Height along the leg
+            color("green") {
+                gusset_h = 13;    // Height along the leg
                 gusset_depth = 12; // Extends outward in Y from leg face
-                translate([bx, fy, 0])
+                translate([bx, fy-1*sy, 0])
                     rotate([0, leg_angle, 0])
                         hull() {
                             // Base: wide in Y
                             translate([0, sy*(leg_t/2 + gusset_depth/2), 0])
-                                cube([leg_w, gusset_depth, 0.1], center=true);
+                                cube([leg_w, gusset_depth + 0.1, 0.1], center=true);
                             // Top: tapers to leg face
-                            translate([0, sy*(leg_t/2)-0.2, gusset_h])
+                            translate([0, sy*(leg_t/2), gusset_h])
                                 cube([leg_w, 0.1, 0.1], center=true);
                         }
             }
@@ -388,18 +388,18 @@ else if (part==4) {
         translate([i*30 - 15, j*130 - 65, 0]) {
             if (j==1) {
                 // Front legs: inner flat face rotated to Z=0
-                translate([0, 0, -rack_length/2 + leg_t/2]) 
-                    rotate([-90, 0, 0]) single_leg(i==1, true);
+                translate([100, 0, rack_length/2 + leg_t/2]) 
+                    rotate([90, 0, 0]) single_leg(i==1, true);
             } else {
                 // Rear legs: inner flat face rotated to Z=0
-                translate([0, 0, -rack_length/2 + leg_t/2]) 
-                    rotate([90, 0, 0]) single_leg(i==1, false);
+                translate([0, 0, rack_length/2 + leg_t/2]) 
+                    rotate([270, 0, 0]) single_leg(i==1, false);
             }
         }
     
     // Beams lying flat
-    translate([60, 0, side_dim/2]) rotate([0,0,90]) side_beam(false);
-    translate([80, 0, side_dim/2]) rotate([0,0,90]) side_beam(true);
+    translate([60, -30, side_dim/2]) rotate([0,0,90]) side_beam(false);
+    translate([60, 30, side_dim/2]) rotate([0,0,90]) side_beam(true);
     
     // Deck beams
     translate([0, 150, 0]) deck_beam();
