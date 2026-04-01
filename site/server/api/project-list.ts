@@ -24,24 +24,16 @@ export default defineEventHandler(async (event) => {
 
         data._slug = entry.name
 
-        // Add last modified date
-        try {
-          const stat = await fs.stat(projectJsonPath)
-          data.updatedAt = stat.mtime.toISOString()
-        } catch (e) {
-          data.updatedAt = new Date(0).toISOString()
-        }
+        // Fetch metadata and check for download artifact in parallel
+        const zipPath = path.resolve(process.cwd(), 'public/downloads', `${entry.name}.zip`)
+        const getStat = (p: string) => fs.stat(p).catch(() => null)
+        const [statJson, statZip] = await Promise.all([
+          getStat(projectJsonPath),
+          getStat(zipPath)
+        ])
 
-        // Check if the download artifact exists during generation
-        let hasDownload = false
-        try {
-          const zipPath = path.resolve(process.cwd(), 'public/downloads', `${entry.name}.zip`)
-          const stat = await fs.stat(zipPath)
-          hasDownload = stat.isFile()
-        } catch (e) {
-          // file doesn't exist
-        }
-        data.hasDownload = hasDownload
+        data.updatedAt = statJson ? statJson.mtime.toISOString() : new Date(0).toISOString()
+        data.hasDownload = statZip ? statZip.isFile() : false
 
         return data
       } catch (err) {
