@@ -3,7 +3,7 @@
 // Usage:
 //   use <../../libs/common.scad>
 //
-// Provides: rounded_box, cylinder_with_hole, chamfer_box, screw_hole
+// Provides: rounded_box, cylinder_with_hole, screw_hole
 
 // Rounded rectangular box
 // Parameters:
@@ -33,21 +33,6 @@ module cylinder_with_hole(h, r_outer, r_inner, fn = 32) {
         cylinder(h = h, r = r_outer, $fn = fn);
         translate([0, 0, -0.1])
             cylinder(h = h + 0.2, r = r_inner, $fn = fn);
-    }
-}
-
-// Box with chamfered (angled) top edges
-// Parameters:
-//   size    - [x, y, z] dimensions
-//   chamfer - chamfer size
-module chamfer_box(size, chamfer = 1) {
-    x = size[0];
-    y = size[1];
-    z = size[2];
-    hull() {
-        cube([x, y, z - chamfer]);
-        translate([chamfer, chamfer, 0])
-            cube([x - 2 * chamfer, y - 2 * chamfer, z]);
     }
 }
 
