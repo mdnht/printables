@@ -1,16 +1,25 @@
 import { execFile } from 'child_process'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { exec } from 'child_process'
 import util from 'util'
 
-const execPromise = util.promisify(exec)
 const execFileAsync = util.promisify(execFile)
 
 const handler = async (event: any) => {
   const slug = getRouterParam(event, 'slug')
+
+  // Validate slug to prevent command injection and path traversal
+  if (typeof slug !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(slug)) {
+    return null
+  }
+
   const projectsDir = path.resolve(process.cwd(), '../projects')
-  const projectDir = path.join(projectsDir, slug)
+  const projectDir = path.resolve(projectsDir, slug)
+
+  // Extra path traversal check
+  if (!projectDir.startsWith(projectsDir)) {
+    return null
+  }
 
   try {
     const projectJsonPath = path.join(projectDir, 'project.json')
@@ -66,7 +75,7 @@ const handler = async (event: any) => {
           try {
             const bundleScript = path.resolve(process.cwd(), '../scripts/bundle.py')
             const mainScad = path.join(projectDir, 'main.scad')
-            const { stdout } = await execPromise(`python3 ${bundleScript} ${mainScad}`)
+            const { stdout } = await execFileAsync('python3', [bundleScript, mainScad])
             bundledCode = stdout
           } catch (execErr) {
             console.warn(`Failed to dynamically bundle ${slug}:`, execErr.message)
