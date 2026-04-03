@@ -4,7 +4,7 @@ from pathlib import Path
 import io
 import sys
 
-from bundle import bundle_file
+from bundle import bundle_file, _normalize_path_prefix, _is_excluded
 
 class TestBundle(unittest.TestCase):
     def test_bundle_file_oserror(self):
@@ -30,6 +30,49 @@ class TestBundle(unittest.TestCase):
         with patch.object(Path, 'read_text', return_value=content):
             result = bundle_file(dummy_path, [], set())
             self.assertEqual(result, content)
+
+    def test_normalize_path_prefix(self):
+        """Test _normalize_path_prefix with various edge cases."""
+        cases = [
+            ("A/B", "A/B"),
+            ("A\\B", "A/B"),
+            ("./A/B", "A/B"),
+            ("././A/B", "A/B"),
+            ("A/B/", "A/B"),
+            ("/", "/"),
+            ("", ""),
+            (".", ""),
+            ("./", ""),
+        ]
+        for input_path, expected in cases:
+            with self.subTest(input_path=input_path):
+                self.assertEqual(_normalize_path_prefix(input_path), expected)
+
+    def test_is_excluded(self):
+        """Test _is_excluded with various path scenarios."""
+        # Exact matches
+        self.assertTrue(_is_excluded("BOSL2", ["BOSL2"]))
+        self.assertTrue(_is_excluded("BOSL2/std.scad", ["BOSL2"]))
+
+        # Multiple prefixes
+        self.assertTrue(_is_excluded("BOSL2/std.scad", ["other", "BOSL2"]))
+
+        # Sub-path vs partial name
+        self.assertTrue(_is_excluded("BOSL2/some/path", ["BOSL2"]))
+        self.assertFalse(_is_excluded("BOSL2_old/some/path", ["BOSL2"]))
+
+        # Path normalization in exclusion
+        self.assertTrue(_is_excluded("./BOSL2/std.scad", ["BOSL2"]))
+        self.assertTrue(_is_excluded("BOSL2\\std.scad", ["BOSL2"]))
+        self.assertTrue(_is_excluded("BOSL2/std.scad", ["./BOSL2/"]))
+
+        # Non-matching cases
+        self.assertFalse(_is_excluded("MCAD/stepper.scad", ["BOSL2"]))
+        self.assertFalse(_is_excluded("BOSL", ["BOSL2"]))
+
+        # Empty prefix handling
+        self.assertFalse(_is_excluded("BOSL2", [""]))
+        self.assertFalse(_is_excluded("BOSL2", []))
 
 if __name__ == "__main__":
     unittest.main()
