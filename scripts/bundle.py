@@ -76,6 +76,8 @@ def _normalize_path_prefix(path: str) -> str:
     path = path.replace("\\", "/")
     while path.startswith("./"):
         path = path[2:]
+    if path == ".":
+        path = ""
     if path and path != "/":
         path = path.rstrip("/")
     return path
