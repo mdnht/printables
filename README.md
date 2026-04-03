@@ -79,7 +79,6 @@ use <../../libs/common.scad>   // 相対パス（OpenSCAD GUI でも動作しま
 |---|---|
 | `rounded_box(size, r, fn)` | 角を丸めた直方体ボックス |
 | `cylinder_with_hole(h, r_outer, r_inner, fn)` | 中空円筒（チューブ） |
-| `chamfer_box(size, chamfer)` | 上端にチャンファーを付けたボックス |
 | `screw_hole(d, h, countersink, fn)` | 垂直方向のネジ穴 |
 
 ---
