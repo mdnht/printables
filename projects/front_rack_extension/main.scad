@@ -11,7 +11,7 @@ part = 4; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout,
 /* [Dimensions] */
 rack_outer_width = 102;
 tube_dia         = 12;
-rack_length      = 90;
+rack_length      = 116;
 clip_length      = 24;
 clip_y_offset    = 5.5;
 deck_w           = 150;
