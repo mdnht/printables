@@ -6,13 +6,13 @@
 // with the hook ring.
 
 /* [Which part to render] */
-part = 4; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_beam, 4:print_layout]
+part = 6; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout, 5:spacer, 6:exploded_assembly]
 
 /* [Dimensions] */
 rack_outer_width = 102;
 tube_dia         = 12;
 rack_length      = 110;
-clip_length      = 25;
+clip_length      = 24;
 clip_y_offset    = 5.5;
 deck_w           = 150;
 deck_height      = 120;
@@ -20,9 +20,11 @@ beam_thick       = 3.5;
 beam_w           = 45;
 
 /* [Component Design] */
-leg_w     = 12;    // Width of the flat leg face (Uniform 12mm, matching top cylinder)
+board_w   = 18;    // Width of each deck board (shrunk to 18mm, outer edge aligns perfectly with clip)
+leg_w     = 14;    // Width of the flat leg face (Uniform 14mm, matching top cylinder)
 leg_t     = 6;     // Thickness of the leg (Increased to 6)
-side_dim  = 12;    // Side beam diameter/width (matches hook)
+side_dim  = 14;    // Side beam outer dimension/head (matches hook)
+sq_size   = 5.5;     // Square side beam width/height (reduced for stronger hook walls)
 joint_h   = 22;    // Height of the joint head (now redundant but kept for any offset needs)
 bolt_d    = 4.4;   // Bolt hole diameter (M4 loose fit)
 nut_w     = 7.2;   // Nut width (flat-to-flat)
@@ -46,6 +48,8 @@ rack_w    = rack_outer_width - tube_dia;
 bot_x     = rack_w / 2;
 top_x     = (deck_w/2) - (tube_dia/2);
 leg_top_z = deck_height - side_dim/2;
+leg_angle_mag = atan2(top_x - bot_x, leg_top_z);
+inner_gap = (rack_length - leg_t - 2*board_w) / 3;
 beam_y_positions = [rack_length/2, -rack_length/2];
 $fn = 40;
 
@@ -124,6 +128,43 @@ module tube_clip(len, flush_front=false, flush_back=false) {
         }
 }
 
+// Circular hook profile with an open bottom to drop onto the square peg
+module circular_hook_2d(is_right) {
+    ang = is_right ? -leg_angle_mag : leg_angle_mag;
+    difference() {
+        // Original outer circular shape
+        circle(d=side_dim);
+        
+        // Single clean cutout forming an open U-shape for the square beam
+        rotate(ang) {
+            // Cutout extending from the top face of the square beam
+            // down past the bottom of the cylinder
+            let( cw = sq_size + 0.4, cy = sq_size/2 + 0.2 ) {
+                polygon([
+                    [ cw/2,  cy],
+                    [-cw/2,  cy],
+                    [-cw/2, -side_dim],
+                    [ cw/2, -side_dim]
+                ]);
+            }
+        }
+    }
+}
+
+// The 2D profile of the side beam with a matching circular belly plug
+module side_beam_profile_2d(clearance=0) {
+    union() {
+        // The main square
+        square([sq_size + clearance*2, sq_size + clearance*2], center=true);
+        // The rounded bottom plug to fill the gap seamlessly
+        intersection() {
+            translate([0, -side_dim/2])
+                square([sq_size + clearance*2, side_dim], center=true);
+            circle(d=side_dim + clearance*2);
+        }
+    }
+}
+
 // Single Leg module (Front/Rear, Left/Right)
 module single_leg(is_right, is_front) {
     s  = is_right ? 1 : -1;
@@ -145,7 +186,7 @@ module single_leg(is_right, is_front) {
                 translate([bx, fy, 0]) rotate([0, leg_angle, 0]) 
                     cube([leg_w, leg_t, 0.1], center=true);
                 
-                // Top "Head" (12mm cylinder flush with side beam)
+                // Top "Head" (circular outer shape, matching earlier style)
                 translate([tx, fy, leg_top_z])
                     rotate([90, 0, 0])
                         cylinder(d=side_dim, h=leg_t, center=true);
@@ -169,11 +210,12 @@ module single_leg(is_right, is_front) {
             }
         }
         
-        // 1. Cut the D-shaped bore for the side beam peg
+        // 1. Cut the bore for the side beam peg
         translate([tx, fy, leg_top_z])
             rotate([90, 0, 0])
                 linear_extrude(height=leg_t + 2, center=true)
-                    d_profile(is_right, true, 0.15);
+                    rotate(is_right ? -leg_angle_mag : leg_angle_mag)
+                        side_beam_profile_2d(0.15);
         
         // 3. Ensure the leg's shaft is hollowed out for the Rack Pipe at the bottom
         translate([bx, fy + sy * (clip_length/2 - leg_t/2), 0])
@@ -202,59 +244,69 @@ module single_leg(is_right, is_front) {
     }
 }
 
-// Core tapered profile of the side beam (used for subtraction and generation)
-// Re-introduced to eliminate stress concentration and provide a tapered D-profile socket.
+// Core profile of the side beam (uniform square + rounded belly)
 module side_beam_core(is_right, clearance=0, is_cutter=false) {
-    center_len = rack_length - beam_w; // 59
-    peg_len = rack_length + beam_w + (is_cutter ? 2.0 : 0); // 149 (plus 2mm for clean cuts)
-    taper_in  = 5.0; // Taper length inside the clip (10mm -> 7mm)
+    ang = is_right ? leg_angle_mag : -leg_angle_mag;
+    // Dynamically match the exact outer boundary of the end boards (no protrusion)
+    outer_board_y = rack_length/2 + leg_t/2 + board_w/2;
+    peg_len = (outer_board_y + board_w/2) * 2 + (is_cutter ? 2.0 : 0);
+    ang = is_right ? -leg_angle_mag : leg_angle_mag;
     
-    // Custom 10mm start-profile (Radius 5.0, linearly shifted center to match 12mm->7mm taper cone)
-    // 12mm pipe: r=6.0, y=0.
-    // 7mm peg:   r=3.5, y=-1.0.
-    // We want physical 10mm diameter (r=5.0). Drop of 1.0 out of 2.5 (40% distance).
-    // So y = 0 + 0.4 * (-1.0) = -0.4.
-    // This custom profile perfectly blends the cylinders WHILE maintaining the exact same flat bottom chord!
-    r_10 = 5.0;
-    y_10 = -0.4;
-    
-    union() {
-        // Straight middle section (12mm) - acts as a flat structural stopper against the deck board face
-        linear_extrude(height=center_len, center=true)
-            d_profile(is_right, false, clearance);
-            
-        // Top Taper (starts sharply at 10mm to create a load-bearing shoulder, maintaining perfectly flush flat bottom)
-        translate([0, 0, center_len/2])
+    if (is_cutter) {
+        linear_extrude(height=peg_len, center=true)
+            rotate(ang)
+                side_beam_profile_2d(clearance);
+    } else {
+        difference() {
+            // Physical geometry with a subtle 0.4mm edge chamfer at the ends
             hull() {
-                linear_extrude(height=0.01) d_profile(is_right, false, clearance, r_10, y_10);
-                translate([0, 0, taper_in])  linear_extrude(height=0.01) d_profile(is_right, true, clearance);
+                linear_extrude(height=peg_len - 0.8, center=true)
+                    rotate(ang)
+                        side_beam_profile_2d(0);
+                linear_extrude(height=peg_len, center=true)
+                    rotate(ang)
+                        side_beam_profile_2d(-0.4);
             }
             
-        // Bottom Taper (starts sharply at 10mm, perfectly maintaining flat bottom, tapers to 7mm inside)
-        translate([0, 0, -center_len/2])
-            hull() {
-                linear_extrude(height=0.01) d_profile(is_right, false, clearance, r_10, y_10);
-                translate([0, 0, -taper_in])  linear_extrude(height=0.01) d_profile(is_right, true, clearance);
-            }
-            
-        // Pegs (7mm)
-        if (is_cutter) {
-            linear_extrude(height=peg_len, center=true)
-                d_profile(is_right, true, clearance);
-        } else {
-            // Physical peg generation: slightly shortened for the chamfer ends
-            linear_extrude(height=peg_len - 0.8, center=true)
-                d_profile(is_right, true, clearance);
+            // Side-notches (横からのザグリ) for ALL deck boards and spacers
+            let ( 
+                inner_y = (rack_length/2 - leg_t/2) - inner_gap - board_w/2,
+                gap_front = (rack_length/2 - leg_t/2) - inner_gap/2,
+                gap_center = 0,
+                gap_rear = -((rack_length/2 - leg_t/2) - inner_gap/2),
                 
-            // Chamfered peg ends (10 slices per side for a subtle 0.4mm edge break)
-            for(i=[0:0.04:0.36]) {
-                translate([0, 0, (peg_len/2 - 0.4) + i])
-                    linear_extrude(height=0.042)
-                        d_profile(is_right, true, clearance-i);
-                        
-                translate([0, 0, -(peg_len/2) + i])
-                    linear_extrude(height=0.042)
-                        d_profile(is_right, true, clearance-(0.4 - i));
+                // Shift offsets to match the supportless inward-shifted tab placement
+                // Boards map to +7 globally. Spacers map to (-len/2 + 2) globally.
+                notch_positions = [
+                    // Boards: local Z = -target_global_Y
+                    -( outer_board_y - 7 ), // Outer Front (Target Y is outer_y - 7)
+                    -( inner_y - 7 ),       // Inner Front (Target Y is inner_y - 7)
+                    -( -inner_y + 7 ),      // Inner Rear (Target Y is -inner_y + 7)
+                    -( -outer_board_y + 7 ),// Outer Rear (Target Y is -outer_y + 7)
+                    
+                    // Spacers: local Z = -target_global_Y
+                    -( gap_front - (inner_gap/2 - 2) ),  // Front Spacer
+                    -( gap_center - (inner_gap/2 - 2) ), // Center Spacer
+                    -( gap_rear + (inner_gap/2 - 2) )    // Rear Spacer (tab flipped for perfect symmetry)
+                ]
+            ) {
+                for (bz = notch_positions) {
+                    // Cut out a depth wedge (deep at the top catch, shallow at bottom)
+                    // The catch ledge is at local Y = -1.4, depth goes to 0 at Y = -5.6
+                    rotate([0, 0, ang]) {
+                        for (sx = [-1, 1]) {
+                            translate([0, 0, bz]) 
+                                scale([sx, 1, 1])
+                                    linear_extrude(height=5.2, center=true)
+                                        polygon([
+                                            [2.25, -1.4], // 0.1mm clearance above the -1.5mm ledge
+                                            [4.0,  -1.4],
+                                            [4.0,  -5.6], // Fully clear the bottom
+                                            [2.75, -5.6]
+                                        ]);
+                        }
+                    }
+                }
             }
         }
     }
@@ -268,38 +320,74 @@ module side_beam(is_right) {
                 side_beam_core(is_right, 0, false);
 }
 
-// Deck beam (Restored original design)
-module deck_beam() {
+// A spacer to cover the exposed side beam in the gaps
+module side_beam_spacer(len, flip_tab=false) {
+    union() {
+        difference() {
+            cylinder(d=side_dim, h=len, center=true);
+            
+            // 45 deg chamfer logic for the spacer ends
+            for (zz=[-len/2, len/2]) {
+                if (zz < 0) {
+                    translate([0,0,zz]) difference() { cylinder(r=hook_outer+5, h=0.51, center=true); cylinder(r1=hook_outer-0.5, r2=hook_outer, h=0.51, center=true); }
+                } else {
+                    translate([0,0,zz]) difference() { cylinder(r=hook_outer+5, h=0.51, center=true); cylinder(r1=hook_outer, r2=hook_outer-0.5, h=0.51, center=true); }
+                }
+            }
+            
+            // Bore for the side beam
+            linear_extrude(height=len+1, center=true)
+                side_beam_profile_2d(0.2); // Add clearance for sliding
+        }
+        
+        // Snap-fit tabs
+        for (lx=[-1, 1]) {
+            // Shift tab to perfectly touch one side for supportless upright printing
+            translate([0, 0, flip_tab ? -len/2 + 2 : len/2 - 2])
+                // Wedge-shaped tab exactly matching the depth-wedge of the notch
+                scale([lx, 1, 1])
+                    linear_extrude(height=4, center=true)
+                        polygon([
+                            [2.95, -1.5], // Attached to wall (top)
+                            [2.95, -5.5], // Tapers to flush at bottom
+                            [2.35, -1.5]  // Max inward protrusion to lock under the ledge
+                        ]);
+        }
+    }
+}
+
+// A single simple deck board
+module deck_board() {
     z = leg_top_z;
     difference() {
         union() {
-            // Right hook (with 45° chamfer)
+            // Right hook (with 45° chamfer on both sides)
             translate([top_x,0,z]) rotate([90,0,0])
                 difference() {
-                    translate([0,0,-beam_w/2])
-                        linear_extrude(height=beam_w) eccentric_partial_ring(hook_inner, hook_outer, hook_R[0], hook_R[1], -1.0, 0);
-                    translate([0, 0, -beam_w/2 - 0.01])
+                    translate([0,0,-board_w/2])
+                        linear_extrude(height=board_w) circular_hook_2d(true);
+                    translate([0, 0, -board_w/2 - 0.01])
                         difference() { cylinder(r=hook_outer+5, h=0.51); cylinder(r1=hook_outer-0.5, r2=hook_outer, h=0.51); }
-                    translate([0, 0, beam_w/2 - 0.5])
+                    translate([0, 0, board_w/2 - 0.5])
                         difference() { cylinder(r=hook_outer+5, h=0.51); cylinder(r1=hook_outer, r2=hook_outer-0.5, h=0.51); }
                 }
-            // Left hook (with 45° chamfer)
+            // Left hook (with 45° chamfer on both sides)
             translate([-top_x,0,z]) rotate([90,0,0])
                 difference() {
-                    translate([0,0,-beam_w/2])
-                        linear_extrude(height=beam_w) eccentric_partial_ring(hook_inner, hook_outer, hook_L[0], hook_L[1], -1.0, 0);
-                    translate([0, 0, -beam_w/2 - 0.01])
+                    translate([0,0,-board_w/2])
+                        linear_extrude(height=board_w) circular_hook_2d(false);
+                    translate([0, 0, -board_w/2 - 0.01])
                         difference() { cylinder(r=hook_outer+5, h=0.51); cylinder(r1=hook_outer-0.5, r2=hook_outer, h=0.51); }
-                    translate([0, 0, beam_w/2 - 0.5])
+                    translate([0, 0, board_w/2 - 0.5])
                         difference() { cylinder(r=hook_outer+5, h=0.51); cylinder(r1=hook_outer, r2=hook_outer-0.5, h=0.51); }
                 }
-            // Bridge (with 45° chamfer applied only to the bridge plate)
+            // Bridge (with 45° chamfer applied to both sides)
             difference() {
                 hull() {
-                    translate([ top_x,0,z+hook_outer-beam_thick/2]) cube([0.1,beam_w,beam_thick], center=true);
-                    translate([-top_x,0,z+hook_outer-beam_thick/2]) cube([0.1,beam_w,beam_thick], center=true);
+                    translate([ top_x,0,z+hook_outer-beam_thick/2]) cube([0.1,board_w,beam_thick], center=true);
+                    translate([-top_x,0,z+hook_outer-beam_thick/2]) cube([0.1,board_w,beam_thick], center=true);
                 }
-                for(yy=[beam_w/2, -beam_w/2])
+                for(yy=[board_w/2, -board_w/2])
                     for(zz=[z+hook_outer, z+hook_outer-beam_thick])
                         translate([0, yy, zz])
                             rotate([45,0,0])
@@ -307,57 +395,37 @@ module deck_beam() {
             }
         }
 
-        // Tapered Hook bore (precisely matching the side beam profile!)
-        // 0.2mm positive clearance makes the hole perfectly sized for easy fit.
-        // We subtract the core from the inner face (-Y) only. The rear use-case
-        // will just rotate the identical physical part 180 degrees around Z!
-        for (xs=[-1,1]) {
-            is_right = (xs == 1);
-            translate([xs*top_x, -rack_length/2, z])
-                rotate([90,0,0])
-                    side_beam_core(is_right, 0.2, true);
-        }
-
-        // Straddle cutouts: fork the deck hooks to clear the legs
-        for (xs=[-1,1]) {
-            translate([xs*top_x, 0, z])
-                // 13mm wide (X), 6.6mm gap (Y), 40mm tall (Z)
-                cube([13, leg_t + 0.6, 40], center=true);
-        }
-
-        // Two strap slots, positioned further towards the outer edges
-        // Added top and bottom chamfers (tapers) for easy strap insertion!
-        for (sx=[-1, 1]) {
-            z_cent = z + hook_outer - beam_thick/2;
-            translate([sx * 35, 0, z_cent]) {
-                // Bottom Taper
-                hull() {
-                    translate([ 15, 0, -beam_thick/2 - 0.1]) cylinder(r=2.8, h=0.1);
-                    translate([-15, 0, -beam_thick/2 - 0.1]) cylinder(r=2.8, h=0.1);
-                    translate([ 15, 0, -beam_thick/2 + 0.8]) cylinder(r=2, h=0.1);
-                    translate([-15, 0, -beam_thick/2 + 0.8]) cylinder(r=2, h=0.1);
-                }
-                // Straight Body
-                hull() {
-                    translate([ 15, 0, -beam_thick/2 + 0.7]) cylinder(r=2, h=2.1);
-                    translate([-15, 0, -beam_thick/2 + 0.7]) cylinder(r=2, h=2.1);
-                }
-                // Top Taper
-                hull() {
-                    translate([ 15, 0, beam_thick/2 - 0.8]) cylinder(r=2, h=0.1);
-                    translate([-15, 0, beam_thick/2 - 0.8]) cylinder(r=2, h=0.1);
-                    translate([ 15, 0, beam_thick/2]) cylinder(r=2.8, h=0.1);
-                    translate([-15, 0, beam_thick/2]) cylinder(r=2.8, h=0.1);
+    }
+    
+    // Snap-fit tabs from the sides (横からの切り欠きに引っ掛ける爪)
+    for (xs=[-1, 1]) {
+        is_right = (xs == 1);
+        ang = is_right ? -leg_angle_mag : leg_angle_mag;
+        translate([xs*top_x, 0, z]) 
+            rotate([90,0,0]) 
+                rotate(ang) {
+                for (lx=[-1, 1]) {
+                    // The beam notch ledge starts at Y = -1.4.
+                    // Shift tab to perfectly touch one side (+7mm) for supportless upright printing
+                    // This shifts the tab INWARD (towards legs) for the outer deck boards.
+                    translate([0, 0, 7])
+                        // Wedge-shaped tab exactly matching the depth-wedge of the notch
+                        scale([lx, 1, 1])
+                            linear_extrude(height=4, center=true)
+                                polygon([
+                                    [2.95, -1.5], // Attached to wall (top)
+                                    [2.95, -5.5], // Tapers to flush at bottom
+                                    [2.35, -1.5]  // Max inward protrusion to lock under the ledge
+                                ]);
                 }
             }
-        }
     }
 }
 
 // ============================================================
 // Assembly
 // ============================================================
-module assembly() {
+module assembly(explode=0) {
     // 4 Legs (positioned at Z=0 base)
     single_leg(false, true);  // Left Front
     single_leg(false, false); // Left Rear
@@ -370,17 +438,45 @@ module assembly() {
         side_beam(true);  // Right
     }
     
-    // 2 Deck Beams (fully snapped onto the side beams)
-    translate([0, 0, 0]) {
-        color("Coral") translate([0, beam_y_positions[0], 0]) deck_beam();
-        color("Gold")  translate([0, beam_y_positions[1], 0]) rotate([0,0,180]) deck_beam();
+    // 4 Deck Boards 
+    let(
+        outer_y = rack_length/2 + leg_t/2 + board_w/2,
+        inner_y = (rack_length/2 - leg_t/2) - inner_gap - board_w/2
+    ) {
+        translate([0, 0, explode]) color("Coral") {
+            translate([0,  outer_y, 0]) deck_board(); // Outer Front
+            translate([0,  inner_y, 0]) deck_board(); // Inner Front
+            translate([0, -inner_y, 0]) rotate([0,0,180]) deck_board(); // Inner Rear (Rotated for symmetry)
+            translate([0, -outer_y, 0]) rotate([0,0,180]) deck_board(); // Outer Rear (Rotated for symmetry)
+        }
+        
+        // 6 Spacers covering the side beams in the 3 inner gaps
+        let(
+            gap_front = (rack_length/2 - leg_t/2) - inner_gap/2,
+            gap_center = 0,
+            gap_rear = -gap_front
+        ) {
+            translate([0, 0, explode]) color("Goldenrod") {
+                for (is_r = [false, true]) {
+                    ang = is_r ? -leg_angle_mag : leg_angle_mag;
+                    for (gy = [gap_front, gap_center, gap_rear]) {
+                        translate([is_r ? top_x : -top_x, gy, leg_top_z]) 
+                            rotate([90,0,0])
+                                rotate([0, 0, ang]) // Simulates the user 'rolling' the universal spacer to fit the slanted beam
+                                    side_beam_spacer(inner_gap, flip_tab=(gy == gap_rear));
+                    }
+                }
+            }
+        }
     }
 }
 
 if (part==0) render(){assembly();}
 else if (part==1) single_leg(false, true);
 else if (part==2) side_beam(false);
-else if (part==3) deck_beam();
+else if (part==3) deck_board();
+else if (part==5) side_beam_spacer(inner_gap, false);
+else if (part==6) render(){assembly(explode=30);}
 else if (part==4) {
     // Print Layout: optimized for no supports
     // Legs lying on their flush inner Y-face
@@ -401,7 +497,16 @@ else if (part==4) {
     translate([60, -30, side_dim/2]) rotate([0,0,90]) side_beam(false);
     translate([60, 30, side_dim/2]) rotate([0,0,90]) side_beam(true);
     
-    // Deck beams
-    translate([0, 150, 0]) deck_beam();
-    translate([0, -150, 0]) deck_beam();
+    // 4 Deck boards perfectly laid out for printing
+    for (i=[0:3]) {
+        translate([0, 150 + i * 25, 0]) deck_board();
+    }
+    
+    // 6 Spacers printed standing upright on their flat cylindrical face
+    for (is_r = [0:1]) {
+        for (j = [0:2]) {
+            translate([80 + is_r * 25, j * 30 - 30, inner_gap/2])
+                side_beam_spacer(inner_gap, is_r==1); 
+        }
+    }
 }
