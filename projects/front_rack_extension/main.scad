@@ -1,12 +1,12 @@
 
 
 // TUBUS GRAND EXPEDITION Front Rack Extension
-// Hook-and-notch flush joint design with deep 5 o'clock outer wrap.
-// Fixed the bridge integration so the top and bottom merge seamlessly
-// with the hook ring.
+// Zero-clearance notch-and-tab snap-fit joint design for modular deck boards.
+// Features a universal spacer system, flex-relief U-cuts, and precise 
+// slicer-ready topology for optimal 3D printing.
 
 /* [Which part to render] */
-part = 6; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout, 5:spacer, 6:exploded_assembly]
+part = 4; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout, 5:spacer, 6:exploded_assembly]
 
 /* [Dimensions] */
 rack_outer_width = 102;
@@ -25,23 +25,8 @@ leg_w     = 14;    // Width of the flat leg face (Uniform 14mm, matching top cyl
 leg_t     = 6;     // Thickness of the leg (Increased to 6)
 side_dim  = 14;    // Side beam outer dimension/head (matches hook)
 sq_size   = 5.5;     // Square side beam width/height (reduced for stronger hook walls)
-joint_h   = 22;    // Height of the joint head (now redundant but kept for any offset needs)
-bolt_d    = 4.4;   // Bolt hole diameter (M4 loose fit)
-nut_w     = 7.2;   // Nut width (flat-to-flat)
-nut_h     = 3.4;   // Nut height
-
 /* [Hook Joint] */
-hook_wall  = 2.5;
-hook_clear = 0.2;
-notch_r    = side_dim/2 - hook_wall;
-hook_inner = notch_r + hook_clear;
 hook_outer = side_dim / 2;
-
-// Hook wrap angles (math convention, CCW from +X)
-// Right hook: wraps outer(+X) side from 5'oclock(-60°) seamlessly to inner bridge(180°)
-// Left hook: wraps inner bridge(0°) seamlessly to outer(-X) side 7'oclock(240°)
-hook_R = [-60, 180];
-hook_L = [0, 240];
 
 /* [Calculated] */
 rack_w    = rack_outer_width - tube_dia;
@@ -52,9 +37,6 @@ leg_angle_mag = atan2(top_x - bot_x, leg_top_z);
 inner_gap = (rack_length - leg_t - 2*board_w) / 3;
 beam_y_positions = [rack_length/2, -rack_length/2];
 $fn = 40;
-
-function vlen(v) = sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
-function vnorm(v) = v / vlen(v);
 
 // Fan-shaped 2D sector polygon
 module sector2d(a0, a1, r=50) {
@@ -71,32 +53,6 @@ module eccentric_partial_ring(ri, ro, a0, a1, shift_in_y=0, shift_out_y=0) {
             translate([0, shift_in_y]) circle(r=ri); 
         }
         sector2d(a0, a1);
-    }
-}
-
-// Keyed D-shape profile for the side beam (thin peg or thick pipe)
-module d_profile(is_right, use_notch, clearance=0, custom_r=0, custom_y=0) {
-    ha = is_right ? hook_R : hook_L;
-    offset(r=clearance) {
-        intersection() {
-            // Select either the inner 7mm peg, the outer 12mm pipe, or a custom one
-            if (custom_r > 0) {
-                translate([0, custom_y]) circle(r=custom_r);
-            } else if (use_notch) {
-                translate([0, -1.0]) circle(r=notch_r);
-            } else {
-                circle(r=hook_outer);
-            }
-            
-            // The convex hull of the OUTER C-clip profile
-            // This provides the exact straight line connecting the OUTER tips of the clip!
-            hull() {
-                intersection() {
-                    circle(r=hook_outer);
-                    sector2d(ha[0], ha[1]);
-                }
-            }
-        }
     }
 }
 

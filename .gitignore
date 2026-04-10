@@ -5,7 +5,7 @@ _site/
 # OpenSCAD generated files
 *.stl
 *.amf
-*.3mf
+# *.3mf
 *.dxf
 *.svg
 *.png
