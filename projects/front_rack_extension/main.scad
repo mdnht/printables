@@ -11,11 +11,11 @@ part = 6; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout,
 /* [Dimensions] */
 rack_outer_width = 102;
 tube_dia         = 12;
-rack_length      = 110;
+rack_length      = 90;
 clip_length      = 24;
 clip_y_offset    = 5.5;
 deck_w           = 150;
-deck_height      = 125;
+deck_height      = 130;
 beam_thick       = 3.5;
 beam_w           = 45;
 
