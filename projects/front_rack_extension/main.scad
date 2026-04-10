@@ -128,6 +128,24 @@ module tube_clip(len, flush_front=false, flush_back=false) {
         }
 }
 
+// Reusable U-shape cutout with stress relief for hooks and spacers
+module u_cutout_2d() {
+    let( cw = sq_size + 0.6, cy = sq_size/2 + 0.3 ) {
+        polygon([
+            [ cw/2,  cy],
+            [-cw/2,  cy],
+            [-cw/2, -side_dim],
+            [ cw/2, -side_dim]
+        ]);
+        // Stress relief cylinders at the sharp inner corners
+        // Allows the hook arms to flex outward easily during snap-fit
+        for (sx=[-1,1]) {
+            translate([sx * cw/2, cy])
+                circle(r=0.7, $fn=24);
+        }
+    }
+}
+
 // Circular hook profile with an open bottom to drop onto the square peg
 module circular_hook_2d(is_right) {
     ang = is_right ? -leg_angle_mag : leg_angle_mag;
@@ -136,18 +154,7 @@ module circular_hook_2d(is_right) {
         circle(d=side_dim);
         
         // Single clean cutout forming an open U-shape for the square beam
-        rotate(ang) {
-            // Cutout extending from the top face of the square beam
-            // down past the bottom of the cylinder
-            let( cw = sq_size + 0.4, cy = sq_size/2 + 0.2 ) {
-                polygon([
-                    [ cw/2,  cy],
-                    [-cw/2,  cy],
-                    [-cw/2, -side_dim],
-                    [ cw/2, -side_dim]
-                ]);
-            }
-        }
+        rotate(ang) u_cutout_2d();
     }
 }
 
@@ -335,9 +342,9 @@ module side_beam_spacer(len, flip_tab=false) {
                 }
             }
             
-            // Bore for the side beam
+            // U-Cut for snap-fitting the spacer onto the side beam from above
             linear_extrude(height=len+1, center=true)
-                side_beam_profile_2d(0.2); // Add clearance for sliding
+                u_cutout_2d();
         }
         
         // Snap-fit tabs
@@ -394,7 +401,17 @@ module deck_board() {
                                 cube([deck_w+10, 0.71, 0.71], center=true);
             }
         }
-
+        
+        // Ensure the U-cutouts and stress reliefs penetrate through the overlying bridge!
+        for (xs=[-1, 1]) {
+            is_right = (xs == 1);
+            ang = is_right ? -leg_angle_mag : leg_angle_mag;
+            translate([xs*top_x, 0, z]) 
+                rotate([90,0,0])
+                    linear_extrude(height=board_w + 2, center=true)
+                        rotate(ang)
+                            u_cutout_2d();
+        }
     }
     
     // Snap-fit tabs from the sides (横からの切り欠きに引っ掛ける爪)
