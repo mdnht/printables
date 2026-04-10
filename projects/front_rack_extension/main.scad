@@ -6,7 +6,7 @@
 // with the hook ring.
 
 /* [Which part to render] */
-part = 4; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout, 5:spacer, 6:exploded_assembly]
+part = 6; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout, 5:spacer, 6:exploded_assembly]
 
 /* [Dimensions] */
 rack_outer_width = 102;
@@ -307,7 +307,7 @@ module side_beam_core(is_right, clearance=0, is_cutter=false) {
                                 scale([sx, 1, 1])
                                     linear_extrude(height=5.2, center=true)
                                         polygon([
-                                            [2.25, -1.4], // 0.1mm clearance above the -1.5mm ledge
+                                            [1.55, -1.4], // 1.2mm deep locking pocket
                                             [4.0,  -1.4],
                                             [4.0,  -5.6], // Fully clear the bottom
                                             [2.75, -5.6]
@@ -359,7 +359,7 @@ module side_beam_spacer(len, flip_tab=false) {
                             [3.5, -1.4],  // Anchor deeply into wall (top)
                             [3.5, -5.6],  // Anchor deeply into wall (bottom)
                             [2.75, -5.6], // Tapers exactly to the zero-clearance wall boundary
-                            [2.25, -1.4]  // Exact inward protrusion locking tightly into the pocket
+                            [1.55, -1.4]  // Exact inward protrusion locking tightly into the deepened pocket
                         ]);
         }
     }
@@ -435,7 +435,7 @@ module deck_board() {
                                     [3.5, -1.4],  // Anchor deeply into wall (top)
                                     [3.5, -5.6],  // Anchor deeply into wall (bottom)
                                     [2.75, -5.6], // Tapers exactly to the zero-clearance wall boundary
-                                    [2.25, -1.4]  // Exact inward protrusion locking tightly into the pocket
+                                    [1.55, -1.4]  // Exact inward protrusion locking tightly into the deepened pocket
                                 ]);
                 }
             }
