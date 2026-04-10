@@ -130,7 +130,8 @@ module tube_clip(len, flush_front=false, flush_back=false) {
 
 // Reusable U-shape cutout with stress relief for hooks and spacers
 module u_cutout_2d() {
-    let( cw = sq_size + 0.6, cy = sq_size/2 + 0.3 ) {
+    // Zero clearance: hole exactly matches the side beam profile
+    let( cw = sq_size, cy = sq_size/2 ) {
         polygon([
             [ cw/2,  cy],
             [-cw/2,  cy],
@@ -355,9 +356,10 @@ module side_beam_spacer(len, flip_tab=false) {
                 scale([lx, 1, 1])
                     linear_extrude(height=4, center=true)
                         polygon([
-                            [2.95, -1.5], // Attached to wall (top)
-                            [2.95, -5.5], // Tapers to flush at bottom
-                            [2.35, -1.5]  // Max inward protrusion to lock under the ledge
+                            [3.5, -1.4],  // Anchor deeply into wall (top)
+                            [3.5, -5.6],  // Anchor deeply into wall (bottom)
+                            [2.75, -5.6], // Tapers exactly to the zero-clearance wall boundary
+                            [2.25, -1.4]  // Exact inward protrusion locking tightly into the pocket
                         ]);
         }
     }
@@ -430,9 +432,10 @@ module deck_board() {
                         scale([lx, 1, 1])
                             linear_extrude(height=4, center=true)
                                 polygon([
-                                    [2.95, -1.5], // Attached to wall (top)
-                                    [2.95, -5.5], // Tapers to flush at bottom
-                                    [2.35, -1.5]  // Max inward protrusion to lock under the ledge
+                                    [3.5, -1.4],  // Anchor deeply into wall (top)
+                                    [3.5, -5.6],  // Anchor deeply into wall (bottom)
+                                    [2.75, -5.6], // Tapers exactly to the zero-clearance wall boundary
+                                    [2.25, -1.4]  // Exact inward protrusion locking tightly into the pocket
                                 ]);
                 }
             }
