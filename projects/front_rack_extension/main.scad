@@ -15,7 +15,7 @@ rack_length      = 110;
 clip_length      = 24;
 clip_y_offset    = 5.5;
 deck_w           = 150;
-deck_height      = 120;
+deck_height      = 125;
 beam_thick       = 3.5;
 beam_w           = 45;
 
