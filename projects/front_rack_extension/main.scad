@@ -6,7 +6,7 @@
 // with the hook ring.
 
 /* [Which part to render] */
-part = 0; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout, 5:spacer, 6:exploded_assembly]
+part = 4; // [0:assembly, 1:leg_left, 2:leg_right, 3:deck_board, 4:print_layout, 5:spacer, 6:exploded_assembly]
 
 /* [Dimensions] */
 rack_outer_width = 102;
