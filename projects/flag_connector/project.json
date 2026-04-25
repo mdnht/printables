@@ -1,0 +1,14 @@
+{
+    "name": "flag_connector",
+    "description": "自転車用安全フラッグの棒（ポール）コネクター",
+    "version": "0.2.0",
+    "author": "mdnht",
+    "tags": [
+        "自転車",
+        "フラッグ",
+        "安全",
+        "コネクター",
+        "パラメトリック"
+    ],
+    "publish": true
+}
