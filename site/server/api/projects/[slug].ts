@@ -17,7 +17,8 @@ const handler = async (event: any) => {
   const projectDir = path.resolve(projectsDir, slug)
 
   // Extra path traversal check
-  if (!projectDir.startsWith(projectsDir)) {
+  const relative = path.relative(projectsDir, projectDir)
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
     return null
   }
 
