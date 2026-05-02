@@ -1,7 +1,5 @@
 import assert from 'node:assert'
 import test from 'node:test'
-import path from 'path'
-import { promises as fs } from 'fs'
 import handler from './[slug].ts'
 
 // Mock getRouterParam
