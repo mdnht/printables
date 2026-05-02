@@ -140,8 +140,8 @@ jobs:
 
             # Create zip package for project containing scad and png files
             cd site/public/downloads
-            if ls *${proj}.* 1> /dev/null 2>&1; then
-              zip -q ${proj}.zip *${proj}.* || true
+            if ls *"${proj}".* 1> /dev/null 2>&1; then
+              zip -q "${proj}.zip" *"${proj}".* || true
             fi
             cd ../../..
           done
