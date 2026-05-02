@@ -4,7 +4,7 @@ from pathlib import Path
 import io
 import sys
 
-from bundle import bundle_file, _normalize_path_prefix, _is_excluded
+from bundle import bundle_file, _normalize_path_prefix, _is_excluded, _sanitize_source
 
 class TestBundle(unittest.TestCase):
     def test_bundle_file_oserror(self):
@@ -73,6 +73,73 @@ class TestBundle(unittest.TestCase):
         # Empty prefix handling
         self.assertFalse(_is_excluded("BOSL2", [""]))
         self.assertFalse(_is_excluded("BOSL2", []))
+
+    def test_sanitize_source(self):
+        """Test _sanitize_source with various scenarios."""
+        cases = [
+            ("Empty string", "", ""),
+            ("No comments or strings", "cube(10);", "cube(10);"),
+            ("Single-line comment", "cube(10); // comment", "cube(10);           "),
+            ("Single-line comment with newline", "code(); // comment\nmore();", "code();           \nmore();"),
+            ("Multi-line comment", "/* comment */ cube(10);", "              cube(10);"),
+            ("Multi-line comment with newlines", "/*\n comment\n */ cube(10);", "  \n        \n    cube(10);"),
+            ("String literal", 's = "hello";', 's =        ;'),
+            ("Escaped quote in string", 's = "he\\"llo";', 's =          ;'),
+            ("Comment symbols in string", 's = "// /* */";', 's =           ;'),
+            ("Quotes in single-line comment", '// "quote"', '          '),
+            ("Quotes in multi-line comment", '/* "quote" */', '             '),
+            ("Unclosed string", '"unclosed', '         '),
+            ("Unclosed multi-line comment", '/* unclosed', '           '),
+        ]
+
+        for name, input_str, expected in cases:
+            with self.subTest(name=name):
+                result = _sanitize_source(input_str)
+                self.assertEqual(result, expected, f"Failed case: {name}")
+                self.assertEqual(len(result), len(input_str), f"Length mismatch in case: {name}")
+
+    def test_sanitize_source_complex(self):
+        """Test _sanitize_source with a complex OpenSCAD-like snippet."""
+        source = (
+            "module x() {\n"
+            "  // comment here\n"
+            "  s = \"str /* not a comment */\";\n"
+            "  /* multi-line\n"
+            "     comment */\n"
+            "  cube(10);\n"
+            "}"
+        )
+        # Expected:
+        # "module x() {\n"
+        # "                 \n"
+        # "  s =                          ;\n"
+        # "               \n"
+        # "               \n"
+        # "  cube(10);\n"
+        # "}"
+
+        # Let's be precise about spaces.
+        # "// comment here" -> 15 characters (including //) replaced by 15 spaces.
+        # "\"str /* not a comment */\"" -> " + 23 chars + " = 25 chars replaced by 25 spaces.
+
+        result = _sanitize_source(source)
+
+        # Verify lines count
+        self.assertEqual(result.count('\n'), source.count('\n'))
+
+        # Verify that non-comment/string parts are preserved
+        self.assertIn("module x() {", result)
+        self.assertIn("s = ", result)
+        self.assertIn("cube(10);", result)
+        self.assertIn("}", result)
+
+        # Verify that comments and strings are gone
+        self.assertNotIn("comment here", result)
+        self.assertNotIn("str /* not a comment */", result)
+        self.assertNotIn("multi-line", result)
+
+        # Verify length
+        self.assertEqual(len(result), len(source))
 
 if __name__ == "__main__":
     unittest.main()
