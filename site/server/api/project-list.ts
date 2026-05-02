@@ -14,17 +14,24 @@ const handler = async (event: any) => {
   const projectsDir = path.resolve(process.cwd(), '../projects')
 
   try {
-    const entries = await fs.readdir(projectsDir, { withFileTypes: true })
-    const projects = []
+    const [entries, downloads] = await Promise.all([
+      fs.readdir(projectsDir, { withFileTypes: true }),
+      fs.readdir(path.resolve(process.cwd(), 'public/downloads')).catch(() => [])
+    ])
+    const downloadSet = new Set(downloads)
+    const projects = await Promise.all(
+      entries
+        .filter(entry => entry.isDirectory())
+        .map(async (entry) => {
+          const projectJsonPath = path.join(projectsDir, entry.name, 'project.json')
+          try {
+            const fileContent = await fs.readFile(projectJsonPath, 'utf-8')
+            const data = JSON.parse(fileContent)
 
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const projectJsonPath = path.join(projectsDir, entry.name, 'project.json')
-        try {
-          const fileContent = await fs.readFile(projectJsonPath, 'utf-8')
-          const data = JSON.parse(fileContent)
+            if (!data.publish) {
+              return null
+            }
 
-          if (data.publish) {
             data._slug = entry.name
 
             // Set project_type, defaulting to 'model'
@@ -56,24 +63,16 @@ const handler = async (event: any) => {
             data.updatedAt = updatedAt
 
             // Check if the download artifact exists during generation
-            let hasDownload = false
-            try {
-              const zipPath = path.resolve(process.cwd(), 'public/downloads', `${entry.name}.zip`)
-              const stat = await fs.stat(zipPath)
-              hasDownload = stat.isFile()
-            } catch (e) {
-              // file doesn't exist
-            }
-            data.hasDownload = hasDownload
+            data.hasDownload = downloadSet.has(`${entry.name}.zip`)
 
-            projects.push(data)
+            return data
+          } catch (err) {
+            // If project.json doesn't exist or is invalid JSON, just skip this directory
+            console.warn(`Could not read/parse project.json for ${entry.name}:`, (err as Error).message)
+            return null
           }
-        } catch (err) {
-          // If project.json doesn't exist or is invalid JSON, just skip this directory
-          console.warn(`Could not read/parse project.json for ${entry.name}:`, err.message)
-        }
-      }
-    }
+        })
+    ).then(results => results.filter(p => p !== null))
 
     // Sort projects by updatedAt (descending by default)
     projects.sort((a, b) => {
