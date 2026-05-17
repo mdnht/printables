@@ -1,0 +1,11 @@
+{
+    "name": "toy-boat",
+    "description": "おもちゃのボート",
+    "version": "0.2.0",
+    "author": "harumichi",
+    "tags": [
+        "ボート",
+        "おもちゃ"
+    ],
+    "publish": true
+}
